@@ -2,17 +2,17 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from tqdm import tqdm
-from dataset.LEVIR_CD import CDDataset
+from dataset import CDDataset
 from model.help_function import size_restore
-from model.network_coarse import Coarse
-from model.Dual_Perspective_Frequency_Feature_Extractor import FreTransformer
+from model.module_coarse_detection import CoarseDetection
+from model.module_dpffe import DualPerspectiveFrequencyFeatureExtractor
 # from model.cdd_Dpffe import FreTransformer
 from model.to_dct import ToDCT
 from model.backbone import ResNet
-from model.Spa_Fre_Feature_Fusion import SpaFreInteractionFusionModule
+from model.module_sfif import SpaFreInteractionFusionModule
 # from model.cdd_Sfif import SpaFreInteractionFusionModule
 from configs.LEVIR_CD import pretrain_model_path_ResNet18
-from model.Fre_Feature_Pred_Head import FreFeaturePred
+from model.module_fph import FreFeaturePred
 # from model.cdd_fre_pred import FreFeaturePred
 
 
@@ -42,9 +42,9 @@ class Network(nn.Module):
         self.coarse = Coarse(stages_num=stages_num, threshold=threshold, patch_size=patch_size, channel=self.channel,
                              phase=phase)
         self.to_dct = ToDCT(dct_size=dct_size, patch_size=patch_size)
-        self.freTransformer = FreTransformer(dct_size=dct_size, patch_size=patch_size,
-                                             encoder_depth=encoder_depth, encoder_heads=encoder_heads, encoder_dim=encoder_dim,
-                                             decoder_depth=decoder_depth, decoder_heads=decoder_heads, decoder_dim=decoder_dim, dropout=dropout)
+        self.freTransformer = DualPerspectiveFrequencyFeatureExtractor(dct_size=dct_size, patch_size=patch_size,
+                                                                       encoder_depth=encoder_depth, encoder_heads=encoder_heads, encoder_dim=encoder_dim,
+                                                                       decoder_depth=decoder_depth, decoder_heads=decoder_heads, decoder_dim=decoder_dim, dropout=dropout)
         self.frepred = FreFeaturePred(dct_size=dct_size, patch_size=patch_size)
         self.sfifm = SpaFreInteractionFusionModule(patch_size=patch_size)
         self.pred_head2 = nn.Sequential(
