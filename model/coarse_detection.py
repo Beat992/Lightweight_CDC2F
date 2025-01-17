@@ -17,9 +17,9 @@ backbone_total_channels = {
     'resnet50': 3904,
 }
 
-class ResNetCD(nn.Module):
+class CoarseDetection(nn.Module):
     def __init__(self, backbone='resnet50'):
-        super(ResNetCD, self).__init__()
+        super(CoarseDetection, self).__init__()
         self.backbone = backbone
         if backbone == 'resnet18':
             self.resnet = resnet.resnet18()

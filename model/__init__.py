@@ -1,1 +1,1 @@
-from model.network import ResNetCD
+from model.coarse_detection import ResNetCD
