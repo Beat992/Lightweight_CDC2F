@@ -91,11 +91,9 @@ class CoarseDetection(nn.Module):
     def forward(self, x0, x1):
         x0 = self.feature_extraction(x0)
         x1 = self.feature_extraction(x1)
-        # x0 = F.interpolate(x0, [128, 128], mode='bilinear', align_corners=True)
-        # x1 = F.interpolate(x1, [128, 128], mode='bilinear', align_corners=True)
         change_score = torch.abs(x0 - x1)
         change_score = self.pred_head(change_score)
 
-        return torch.sigmoid(change_score)
+        return x0, x1, change_score
 
 # print(ResNetCD('resnet18'))
