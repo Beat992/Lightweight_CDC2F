@@ -1,6 +1,29 @@
 import torch.nn.functional as F
 import torch
 import numpy as np
+from torch import Tensor
+from torchjpeg import dct
+
+def cut(x: Tensor, size):
+    n, c, h, w = x.shape
+    x = F.unfold(x, kernel_size=(size, size),
+                 stride=(size, size))
+    x = x.view(n, c, size, size, -1).permute(0, 4, 1, 2, 3)
+
+    return x   # N, L, C, H, W
+
+
+def apply_dct(x, dct_size):
+    # in shape: N, C, block_size, block_size
+    x = cut(x, dct_size) # N, L, C, dct_size, dct_size
+    x = x / 2
+    x = x + 0.5
+    x = x * 255
+    x = x - 128  # DCT requires that pixel value must in [-128, 127]
+    x = dct.block_dct(x)
+    x = zigzag_extraction(x)   # 做zigzag展开, N, L, C, dct_size^2
+    return x
+
 
 def size_restore(x, input_size=4, output_size=64):
     """
@@ -21,12 +44,12 @@ def size_restore(x, input_size=4, output_size=64):
 
 
 
-def zigzag_extraction(input_tensor):
-    batch_size, channels, dct_size, _ = input_tensor.size()
+def zigzag_extraction(input_tensor: Tensor):
+    N, L, C, dct_size, dct_size = input_tensor.shape
     output_size = dct_size * dct_size
 
     # Reshape the input tensor to (batch_size * channels, dct_size, dct_size)
-    reshaped_tensor = input_tensor.view(batch_size * channels, dct_size, dct_size)
+    reshaped_tensor = input_tensor.view(-1, dct_size, dct_size)
 
     # Create zigzag indices for dct_size x dct_size matrix
     indices = torch.from_numpy(zigzag_indices(dct_size))
@@ -35,7 +58,7 @@ def zigzag_extraction(input_tensor):
     zigzag_tensor = reshaped_tensor[:, indices[:, 0], indices[:, 1]]
 
     # Reshape the zigzag_tensor back to (batch_size, channels, output_size)
-    output_tensor = zigzag_tensor.view(batch_size, channels, output_size)
+    output_tensor = zigzag_tensor.view(N, L, C, output_size)
 
     return output_tensor
 
