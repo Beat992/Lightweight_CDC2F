@@ -14,7 +14,7 @@ from model.layers import Transformer, TransformerDecoder
 class DualPerFreFeatureExtractor(nn.Module):
     def __init__(self,
                  dct_size=4,
-                 patch_size=64,
+                 block_size=64,
                  encoder_depth=1,
                  encoder_heads=8,
                  encoder_dim=8,
@@ -28,22 +28,14 @@ class DualPerFreFeatureExtractor(nn.Module):
         self.t1_f = None
         self.t0_f = None
         self.dct_size = dct_size
-        self.patch_size = patch_size
-        self.mini_patch_num = (patch_size // dct_size) ** 2
-        token_len_p = 3 * (dct_size**2)
-        self.f_conv_band = nn.Sequential(
-            nn.Conv2d(in_channels=(dct_size**2)*3, out_channels=(dct_size**2)*3, kernel_size=3, stride=1, padding=1,
-                      groups=(dct_size**2)*3),
-        )
-        self.f_conv_bands = nn.Sequential(
-            nn.Conv2d(in_channels=(dct_size ** 2) * 3, out_channels=(dct_size ** 2) * 3 // 4, kernel_size=3, stride=1,
-                      padding=1,
-                      groups=4),
-            nn.ReLU(),
-            nn.Conv2d(in_channels=(dct_size ** 2) * 3 // 4, out_channels=(dct_size ** 2) * 3, kernel_size=3, stride=1,
-                      padding=1,
-                      groups=(dct_size ** 2) * 3 // 4),
-        )
+        self.block_size = block_size
+        self.bands = dct_size ** 2
+        self.mini_patch_num = (block_size // dct_size) ** 2
+        token_len_p = 3 * self.bands
+        self.f_conv_band = nn.Conv2d(self.bands * 3, 256, (3, 3))
+        self.band_group_conv0 = BandGroupConv(self.bands * 3, 16, 8, 1)
+        self.band_group_conv1 = BandGroupConv(self.bands * 3, 4, 32, 1)
+        self.band_group_conv2 = BandGroupConv(self.bands * 3, 1, 128, 1)
         self.embedding_layer_p2p = nn.Linear(token_len_p, token_len_p)
         self.encoder_p = Transformer(dim=token_len_p,
                                      depth=encoder_depth,
@@ -51,56 +43,55 @@ class DualPerFreFeatureExtractor(nn.Module):
                                      dim_head=encoder_dim,
                                      mlp_dim=token_len_p,
                                      dropout=dropout)
-        self.enc_pos_embedding_p2p = nn.Parameter(torch.randn(1, (patch_size // dct_size) ** 2, token_len_p))
-        self.dec_pos_embedding_p2p = nn.Parameter(torch.randn(1, (patch_size // dct_size) ** 2, token_len_p))
+        self.enc_pos_embedding_p2p = nn.Parameter(torch.randn(1, (block_size // dct_size) ** 2, token_len_p))
+        self.dec_pos_embedding_p2p = nn.Parameter(torch.randn(1, (block_size // dct_size) ** 2, token_len_p))
         self.decoder_p = TransformerDecoder(dim=token_len_p, depth=decoder_depth, heads=decoder_heads,
                                             dim_head=decoder_dim, dropout=dropout, mlp_dim=decoder_dim)
         self.dc_conv_p = nn.Conv2d(in_channels=3, out_channels=3, kernel_size=3, stride=1, padding=1)
         self.st_embedding = nn.Sequential(
             nn.Linear(7, 32),
-            nn.BatchNorm2d((patch_size//dct_size)**2),
+            nn.BatchNorm2d((block_size//dct_size)**2),
             nn.GELU(),
             nn.Linear(32, 64),
-            nn.BatchNorm2d((patch_size//dct_size)**2),
+            nn.BatchNorm2d((block_size//dct_size)**2),
             nn.GELU(),
             nn.Linear(64, 128),
         )
         self.p_embedding = nn.Sequential(
-            nn.Linear(dct_size**2, 64),
-            nn.BatchNorm2d((patch_size//dct_size)**2),
+            nn.Linear(self.bands, 64),
+            nn.BatchNorm2d((block_size//dct_size)**2),
             nn.GELU(),
             nn.Linear(64, 128),
-            nn.BatchNorm2d((patch_size//dct_size)**2),
+            nn.BatchNorm2d((block_size//dct_size)**2),
             nn.GELU(),
             nn.Linear(128, 128),
         )
 
         self.st2fil = nn.Sequential(
             nn.Linear(128, 64),
-            nn.BatchNorm2d((patch_size//dct_size)**2),
+            nn.BatchNorm2d((block_size//dct_size)**2),
             nn.GELU(),
             nn.Linear(64, 32),
-            nn.BatchNorm2d((patch_size//dct_size)**2),
+            nn.BatchNorm2d((block_size//dct_size)**2),
             nn.GELU(),
             nn.Linear(32, 1),
             nn.Sigmoid(),
         )
-        self.seblock = SEBlock(channel=(dct_size**2)*3, reduction=6)
-        self.conv_t0 = TwoLayerGroupConv(patch_size, dct_size)
-        self.conv_t1 = TwoLayerGroupConv(patch_size, dct_size)
-        self.conv_attn = TwoLayerGroupConv(patch_size, dct_size)
-        self.conv_tov_t0 = TwoLayerGroupConv(patch_size, dct_size)
-        self.conv_tov_t1 = TwoLayerGroupConv(patch_size, dct_size)
-        self.cat_attn = TwoLayerGroupConv(patch_size, dct_size, True)
+        self.seblock = SEBlock(channel=self.bands*3*2, reduction=6)
+        self.conv_t0 = TwoLayerGroupConv(block_size, dct_size)
+        self.conv_t1 = TwoLayerGroupConv(block_size, dct_size)
+        self.conv_attn = TwoLayerGroupConv(block_size, dct_size)
+        self.conv_tov_t0 = TwoLayerGroupConv(block_size, dct_size)
+        self.conv_tov_t1 = TwoLayerGroupConv(block_size, dct_size)
+        self.cat_attn = TwoLayerGroupConv(block_size, dct_size, True)
         
-    def _f2f(self, x):
-        bs16, patch_num, ch, fre_num = x.shape
-        x = x.transpose(1, 3).reshape(bs16, -1, int(sqrt(patch_num)), int(sqrt(patch_num)))
-        x1 = self.f_conv_band(x)
-        x2 = self.f_conv_bands(x)
-        x = x1 + x2
+    def _band_level(self, x):
+        bs_block, patch_num, ch, fre_num = x.shape
+        h = self.block_size // self.dct_size
+        x = x.transpose(1, 3).reshape(bs_block, -1, h, h)
+        x = self.band_group_conv0(x) + self.band_group_conv1(x) + self.band_group_conv2(x) + x
         x = self.seblock(x)
-        x = x.reshape(bs16, -1, ch, patch_num).transpose(1, 3)
+        x = x.reshape(bs_block, -1, ch, patch_num).transpose(1, 3)
         return x
 
     def _p2p(self, x1):
@@ -135,18 +126,18 @@ class DualPerFreFeatureExtractor(nn.Module):
     def _fre_interaction(self, x1, x2):
         x1 = x1.view(-1, self.mini_patch_num, 6 * self.dct_size ** 2).transpose(1, 2).reshape(-1,
                                                                                               6 * self.dct_size ** 2,
-                                                                                              self.patch_size // self.dct_size,
-                                                                                              self.patch_size // self.dct_size)
+                                                                                              self.block_size // self.dct_size,
+                                                                                              self.block_size // self.dct_size)
         x2 = x2.view(-1, self.mini_patch_num, 6 * self.dct_size ** 2).transpose(1, 2).reshape(-1,
                                                                                               6 * self.dct_size ** 2,
-                                                                                              self.patch_size // self.dct_size,
-                                                                                              self.patch_size // self.dct_size)
+                                                                                              self.block_size // self.dct_size,
+                                                                                              self.block_size // self.dct_size)
         x1_q = self.conv_t0(x1)
         x2_q = self.conv_t1(x2)
         # attn1 = self.cat_attn(torch.cat([x1_q, x2_q], dim=1))
         attn1 = self.cat_attn(torch.cat([x1_q.unsqueeze(2), x2_q.unsqueeze(2)], dim=2).reshape(-1, 12 * self.dct_size ** 2,
-                                                                                            self.patch_size // self.dct_size,
-                                                                                            self.patch_size // self.dct_size))
+                                                                                               self.block_size // self.dct_size,
+                                                                                               self.block_size // self.dct_size))
         attn2 = self.conv_attn(x1_q - x2_q)
         attn = torch.sigmoid(attn1 + attn2)
         self.difference_attention_map = attn
@@ -165,9 +156,9 @@ class DualPerFreFeatureExtractor(nn.Module):
 
         # <------intra patch------>
         t0_dc_p = t0[:, :, :, 0].transpose(1, 2).\
-            reshape(idx.numel(), 3, self.patch_size//self.dct_size, self.patch_size//self.dct_size)
+            reshape(idx.numel(), 3, self.block_size // self.dct_size, self.block_size // self.dct_size)
         t1_dc_p = t1[:, :, :, 0].transpose(1, 2).\
-            reshape(idx.numel(), 3, self.patch_size//self.dct_size, self.patch_size//self.dct_size)
+            reshape(idx.numel(), 3, self.block_size // self.dct_size, self.block_size // self.dct_size)
         t0_dc_p = self.dc_conv_p(t0_dc_p)
         t1_dc_p = self.dc_conv_p(t1_dc_p)
 
@@ -177,8 +168,8 @@ class DualPerFreFeatureExtractor(nn.Module):
         t0_hp = self._p2p(t0)
         t1_hp = self._p2p(t1)
 
-        t0_dc_p = t0_dc_p.reshape(idx.numel(), 3, (self.patch_size//self.dct_size)**2).transpose(1, 2)
-        t1_dc_p = t1_dc_p.reshape(idx.numel(), 3, (self.patch_size//self.dct_size)**2).transpose(1, 2)
+        t0_dc_p = t0_dc_p.reshape(idx.numel(), 3, (self.block_size // self.dct_size) ** 2).transpose(1, 2)
+        t1_dc_p = t1_dc_p.reshape(idx.numel(), 3, (self.block_size // self.dct_size) ** 2).transpose(1, 2)
 
         t0_hp[:, :, :, 0] = t0_hp[:, :, :, 0] + t0_dc_p
         t1_hp[:, :, :, 0] = t1_hp[:, :, :, 0] + t1_dc_p
@@ -211,7 +202,7 @@ class SEBlock(nn.Module):
         y = self.excitation(y).view(batch_size, channel, 1, 1)
         return x * y
 
-class   TwoLayerGroupConv(nn.Module):
+class TwoLayerGroupConv(nn.Module):
     def __init__(self, patch_size, dct_size, if_cat=False):
         super(TwoLayerGroupConv, self).__init__()
         if if_cat:
@@ -219,10 +210,37 @@ class   TwoLayerGroupConv(nn.Module):
         else:
             factor = 1
         self.conv = nn.Sequential(
-            nn.Conv2d(6*dct_size**2 * factor, 6*dct_size**2 * 8, 3, 1, 1, groups=3*dct_size**2),
-            nn.BatchNorm2d(6*dct_size**2 * 8),
+            nn.Conv2d(6*self.bands * factor, 6*self.bands * 8, 3, 1, 1, groups=3*self.bands),
+            nn.BatchNorm2d(6*self.bands * 8),
             nn.ReLU(),
-            nn.Conv2d(6*dct_size**2 * 8, 6*dct_size**2, 3, 1, 1, groups=3*dct_size**2)
+            nn.Conv2d(6*self.bands * 8, 6*self.bands, 3, 1, 1, groups=3*self.bands)
         )
     def forward(self, x):
         return self.conv(x)
+
+class BandGroupConv(nn.Module):
+    def __init__(self, in_channels, groups, groups_channels, num_layers):
+        super(BandGroupConv, self).__init__()
+        mid_channels = groups_channels * groups
+        layers = [SimpleGroupConv(in_channels, mid_channels, groups)]
+        for _ in range(num_layers - 1):
+           layers.append(SimpleGroupConv(mid_channels, mid_channels, groups))
+
+        layers.append(SimpleGroupConv(mid_channels, in_channels//3, groups))
+        self.conv_module = nn.Sequential(*layers)
+
+    def forward(self, x):
+        return self.conv_module(x)
+
+class SimpleGroupConv(nn.Module):
+    def __init__(self, in_channels, out_channels, groups):
+        super(SimpleGroupConv, self).__init__()
+        self.conv = nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1, groups=groups)
+        self.bn = nn.BatchNorm2d(out_channels)
+        self.relu = nn.ReLU(inplace=True)
+
+    def forward(self, x):
+        x = self.conv(x)
+        x = self.bn(x)
+        x = self.relu(x)
+        return x
