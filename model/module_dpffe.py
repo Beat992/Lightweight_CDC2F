@@ -1,15 +1,13 @@
-from math import sqrt
 import torch
 import torch.nn as nn
 from model.layers import Transformer, TransformerDecoder
 
 '''
-    input: DCT patches which need to refinement, some of which is 0,
-           means they are either change completely or no change 
-    shape: (bs*block_num) * patch_num * 3 * bands
-    output: 
+    input: DCT blocks which need to refinement
+        shape: (bs*block_num) * patch_num * 3 * bands
+    output: frequency features
+        shape:  (bs*block_num) * patch_num * 3 * bands
 '''
-
 
 class DualPerFreFeatureExtractor(nn.Module):
     def __init__(self,
@@ -42,8 +40,6 @@ class DualPerFreFeatureExtractor(nn.Module):
         self.pos_embedding_dec = nn.Parameter(torch.randn(1, self.patch_num, len_token))
         self.decoder = TransformerDecoder(dim=len_token, depth=decoder_depth, heads=decoder_heads,
                                             dim_head=decoder_dim, dropout=dropout, mlp_dim=decoder_dim)
-
-
         self.transform_statics = nn.Sequential(
             nn.Linear(7, 32),
             nn.BatchNorm2d(self.patch_num),
