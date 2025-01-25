@@ -1,1 +1,7 @@
-from model.module_coarse_detection import CoarseDetection
+from module_coarse_detection import CoarseDetection
+from module_sfif import SpaFreInteractionFusion
+from module_fph import FreFeaturePred
+from module_dpffe import DualPerFreFeatureExtractor
+from module_coarse_detection import CoarseDetection
+from module_fie import FreInfoExchange
+from help_function import size_restore, cut, apply_dct
