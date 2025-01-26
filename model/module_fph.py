@@ -1,4 +1,3 @@
-from math import sqrt
 import torch
 import torch.nn.functional as F
 import torch.nn as nn
@@ -9,23 +8,21 @@ from model.help_function import inverse_zigzag, size_restore
 class FreFeaturePred(nn.Module):
     def __init__(self,
                  dct_size=4,
-                 patch_size=64):
+                 block_size=64):
         super(FreFeaturePred, self).__init__()
         self.dct_size = dct_size
-        self.patch_size = patch_size
-
-        self.f_conv = nn.Sequential(
-            nn.Conv2d(6, 16, 1, 1, 0),
-            # nn.Conv2d(3, 16, 1, 1, 0),
-            nn.BatchNorm2d(16),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(16, 32, 3, 1, 1),
+        self.block_size = block_size
+        self.h = block_size // dct_size
+        self.bands = dct_size ** 2
+        self.patch_num = (block_size // dct_size) ** 2
+        self.conv1 = nn.Sequential(
+            nn.Conv2d(6, 32, 1, 1, 0),
             nn.BatchNorm2d(32),
             nn.ReLU(inplace=True),
             nn.Conv2d(32, 64, 3, 1, 1),
         )
 
-        self.pred = nn.Sequential(
+        self.pred_f2s = nn.Sequential(
             nn.Conv2d(64, 32, 3, 1, 1),
             nn.BatchNorm2d(32),
             nn.ReLU(inplace=True),
@@ -33,23 +30,23 @@ class FreFeaturePred(nn.Module):
         )
 
         self.fre_embedding = nn.Sequential(
-            nn.Linear(6 * self.dct_size ** 2, 64),
+            nn.Linear(6 * self.bands, 64),
             # nn.Linear(3 * self.dct_size ** 2, 64),
-            nn.BatchNorm1d((self.patch_size//self.dct_size)**2),
+            nn.BatchNorm1d(self.patch_num),
             nn.ReLU(),
             nn.Linear(64, 128),
-            nn.BatchNorm1d((self.patch_size//self.dct_size)**2),
+            nn.BatchNorm1d(self.patch_num),
             nn.ReLU(),
             nn.Linear(128, 256),
         )
         self.pred_head = nn.Sequential(
             nn.Linear(256, 128),
-            nn.BatchNorm1d((self.patch_size//self.dct_size)**2),
+            nn.BatchNorm1d(self.patch_num),
             nn.ReLU(),
             nn.Linear(128, 64),
-            nn.BatchNorm1d((self.patch_size//self.dct_size)**2),
+            nn.BatchNorm1d(self.patch_num),
             nn.ReLU(),
-            nn.Linear(64, 1),
+            nn.Linear(64, 1),    # TODO: 这里的输出通道数再考虑一下
         )
 
         self.deconv = nn.Sequential(
@@ -73,51 +70,47 @@ class FreFeaturePred(nn.Module):
             nn.Conv2d(32, 1, 3, 1, 1, padding_mode='replicate'),
         )
 
-    def forward(self, x_fre):
-        t0_fre, t1_fre = torch.chunk(x_fre, chunks=2, dim=1)
+    def forward(self, x0, x1):
         # <-------频域转换回空间域-------->
-        t0_fre_ = self._idct_and_feature_fre_size_restore(t0_fre)  # bs16, 6, 64, 64
-        t1_fre_ = self._idct_and_feature_fre_size_restore(t1_fre)
-        x_fre = torch.cat([t0_fre_, t1_fre_], dim=1)
+        f0 = self._idct_and_feature_fre_size_restore(x0)  # bs16, 6, 64, 64
+        f1 = self._idct_and_feature_fre_size_restore(x1 )
+        x_fre = torch.cat([f0.clone(), f1.clone()], dim=1)
         # <------空间域预测------->
-        t0_fre_spa = self.f_conv(t0_fre_)
-        t1_fre_spa = self.f_conv(t1_fre_)
-        pred3_score = torch.abs(t0_fre_spa - t1_fre_spa)
-        pred3_score = self.pred(pred3_score)
+        f0_f2s = self.conv1(f0)
+        f1_f2s = self.conv1(f1)
+        pred_score_f2s = torch.abs(f0_f2s - f1_f2s)
+        pred_score_f2s = self.pred_f2s(pred_score_f2s)
 
         # <------频域预测------->
         bs_patch = x_fre.shape[0]
-        t0_fre = t0_fre.view(bs_patch, -1, 6 * self.dct_size ** 2)
-        t1_fre = t1_fre.view(bs_patch, -1, 6 * self.dct_size ** 2)
-        # t0_fre = t0_fre.view(bs_patch, -1, 3 * self.dct_size ** 2)
-        # t1_fre = t1_fre.view(bs_patch, -1, 3 * self.dct_size ** 2)
+        t0_fre = f0.view(bs_patch, -1, 6 * self.dct_size ** 2)
+        t1_fre = f1.view(bs_patch, -1, 6 * self.dct_size ** 2)
         t0_fre = self.fre_embedding(t0_fre)
         t1_fre = self.fre_embedding(t1_fre)
-        pred3_score2 = self.pred_head(torch.abs(t0_fre - t1_fre))
-        pred3_score2 = pred3_score2.view(bs_patch, 1, self.patch_size // self.dct_size,
-                                         self.patch_size // self.dct_size)
+        pred_score_fre = self.pred_head(torch.abs(t0_fre - t1_fre))
+        pred_score_fre = pred_score_fre.view(bs_patch, 1, self.h, self.h)
 
-        pred3_score2 = self.deconv(pred3_score2)
+        pred_score_fre = self.deconv(pred_score_fre)
 
-        pred3_score = pred3_score + pred3_score2
+        pred_score = pred_score_f2s + pred_score_fre
 
-        return pred3_score, x_fre
+        return pred_score, x_fre
         # return x_fre
 
     def _idct_and_feature_fre_size_restore(self, x):
-        b_patch, n, c, _ = x.shape
-        x = x.reshape(b_patch, n * c, -1)
+        bs_block, n, c, _ = x.shape
+        x = x.reshape(bs_block, n * c, -1)
         x = inverse_zigzag(x, dct_size=self.dct_size)
-        x = x.view(b_patch, n, c, self.dct_size, self.dct_size)
-        x = dct.block_idct(x).reshape(b_patch, n, c, -1)
-        x = x.permute(0, 2, 3, 1).reshape(-1, self.dct_size ** 2, n)
-        x = F.fold(x, kernel_size=(self.dct_size, self.dct_size), output_size=(self.patch_size, self.patch_size),
+        x = x.view(bs_block, n, c, self.dct_size, self.dct_size)
+        x = dct.block_idct(x).reshape(bs_block, n, c, -1)
+        x = x.permute(0, 2, 3, 1).reshape(-1, self.badns, n)
+        x = F.fold(x, kernel_size=(self.dct_size, self.dct_size), output_size=(self.block_size, self.block_size),
                    dilation=1, padding=0, stride=(self.dct_size, self.dct_size))
         # x = x.view(b_patch, c, self.patch_size, self.patch_size)
-        x = x.view(b_patch, c, -1)
+        x = x.view(bs_block, c, -1)
         min_value = torch.min(x, dim=2, keepdim=True)[0]
         max_value = torch.max(x, dim=2, keepdim=True)[0]
         # 将张量归一化到[-1, 1]的范围
         x = 2 * (x - min_value) / (max_value - min_value) - 1
-        return x.view(b_patch, c, self.patch_size, self.patch_size)
+        return x.view(bs_block, c, self.block_size, self.block_size)
 
