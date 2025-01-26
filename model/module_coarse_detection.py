@@ -18,7 +18,7 @@ backbone_total_channels = {
 }
 
 class CoarseDetection(nn.Module):
-    def __init__(self, backbone='resnet50'):
+    def __init__(self, backbone='resnet50', pretrained=True):
         super(CoarseDetection, self).__init__()
         self.backbone = backbone
         if backbone == 'resnet18':
@@ -27,7 +27,8 @@ class CoarseDetection(nn.Module):
             self.resnet = resnet.resnet34()
         elif backbone == 'resnet50':
             self.resnet = resnet.resnet50()
-        # self.load_pretrained_backbone()
+        if pretrained:
+            self.load_pretrained_backbone()
 
         self.dim_reduction_conv = nn.Sequential(
             # 如果用resnet50，融合通道的时候应该平滑一点，分几次降低到最低的通道数
