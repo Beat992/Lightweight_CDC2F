@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from model.network import ResNetCD
+from model.module_coarse_detection import CoarseDetection as ResNetCD
 
 layer_dict = {}   # key: module, value: layer_name
 layer_outputs = {}  # key: layer_name, value: output
@@ -13,7 +13,7 @@ def save_intermediate_outputs(module, input, output):
 
 def register_hook(model):
     # 遍历模型中的每个子模块，找到所有卷积层并注册钩子
-    for name, module in model.named_modules():
+    for name, module in model.coarse_detection.named_modules():
         if isinstance(module, nn.Conv2d):
             layer_dict[module] = name
             layer_outputs[name] = []
