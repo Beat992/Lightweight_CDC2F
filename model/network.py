@@ -11,6 +11,7 @@ class CDC2F(nn.Module):
                  decoder_heads=4, decoder_dim=8,
                  dropout=0.5):
         super(CDC2F, self).__init__()
+        self.batch_size = None
         if stages_num == 4:
             if backbone == 'resnet18':
                 self.channel = 512
@@ -55,7 +56,7 @@ class CDC2F(nn.Module):
         )
 
     def forward(self, x0, x1):
-        b = x0.shape[0]
+        self.batch_size = x0.shape[0]
         """
         <----------- stage one --> coarse detection ---------->
         """
@@ -82,8 +83,8 @@ class CDC2F(nn.Module):
         <---------- extra task --> frequency domain pred---------->
         '''
         fre_score, f_fre = self.fph(f0_fre, f1_fre)       # bs_block, 1, self.block_size, self.block_size
-        fre_score = fre_score.view(b, self.block_num, -1)
         if fre_score is not None:
+            fre_score = fre_score.view(self.batch_size, self.block_num, -1)
             fre_score = size_restore(fre_score, input_size=self.block_size, output_size=256)
         '''
         < ---------- dual domain feature interaction fusion---------->
@@ -96,19 +97,18 @@ class CDC2F(nn.Module):
         f0, f1 = self.conv_fused_feature(f0), self.conv_fused_feature(f1)
         fine_score_filtered = torch.abs(f0 - f1)
         fine_score_filtered = self.pred_head_fine(fine_score_filtered)
-        fine_score = torch.zeros(b * self.block_num, 1, self.block_size, self.block_size).to(fine_score_filtered.dtype).cuda()
+        fine_score = torch.zeros(self.batch_size * self.block_num, 1, self.block_size, self.block_size).to(fine_score_filtered.dtype).cuda()
 
         if self.phase == 'train':
-            fine_score_filtered = fine_score_filtered.view(b, self.block_num, -1)
+            fine_score_filtered = fine_score_filtered.view(self.batch_size, self.block_num, -1)
             fine_score_filtered = size_restore(fine_score_filtered, self.block_size, 256)
-        else:
-            fine_score[fine_idx, :, :, :] = fine_score_filtered
-            fine_score = size_restore(fine_score.view(b, -1, self.block_size**2), self.block_size, 256)
-
-        if self.phase == 'train':
             return coarse_score, fre_score, fine_score_filtered, fine_idx
         else:
-            return torch.sigmoid(coarse_score + fine_score)
+            fine_score[fine_idx, :, :, :] = fine_score_filtered
+            fine_score = size_restore(fine_score.view(self.batch_size, -1, self.block_size**2), self.block_size, 256)
+
+        return torch.sigmoid(coarse_score + fine_score)
+
 
     def filter_spa_feature(self, f0_spa, f1_spa, idx):
         f_spa = torch.cat([f0_spa, f1_spa], dim=1)
@@ -130,16 +130,16 @@ class CDC2F(nn.Module):
         coarse_prob = torch.sigmoid(coarse_score)
         coarse_mask = (coarse_prob > self.threshold).float()
         # ps: only filtering when validation or testing, using all block when training
-        idx = torch.ones(coarse_mask.shape[0] * self.block_num).cuda()
+        idx = torch.ones(self.batch_size * self.block_num).cuda()
         if self.phase == 'val' or self.phase == 'test':
             idx = F.unfold(coarse_mask, kernel_size=(self.block_size, self.block_size),
                                   padding=0, stride=(self.block_size, self.block_size))
             idx = (idx.transpose(1, 2).sum(dim=2)).flatten()
             idx = torch.gt(idx, 0) & torch.lt(idx, self.block_size ** 2)
 
-        mask = torch.ones(coarse_mask.shape[0] * self.block_num, self.block_size, self.block_size).cuda()
-        mask = (mask * idx.view(coarse_mask.shape[0] * self.block_num, 1, 1))
-        mask = mask.view(coarse_mask.shape[0], self.block_num, -1).transpose(1, 2)
+        mask = torch.ones(self.batch_size * self.block_num, self.block_size, self.block_size).cuda()
+        mask = (mask * idx.view(self.batch_size * self.block_num, 1, 1))
+        mask = mask.view(self.batch_size, self.block_num, -1).transpose(1, 2)
         mask = F.fold(mask, kernel_size=(self.block_size, self.block_size), output_size=(256, 256),
                       dilation=1, padding=0,
                       stride=(self.block_size, self.block_size))
@@ -163,11 +163,12 @@ class CDC2F(nn.Module):
 if __name__ == '__main__':
     from torchsummary import summary
     from thop import profile
+    import configs as cfg
 
     A = torch.randn(1, 3, 256, 256).cuda()
     B = torch.randn(1, 3, 256, 256).cuda()
-    model = Network('resnet18', 4, 0.5, 'train', 4, 32, 4, 8, 16, 1, 8, 16, 0.5).cuda()
-    summary(model=model, input_size=[(3, 256, 256), (3, 25, 256)], batch_size=1, device="cuda")
+    model = CDC2F(cfg.backbone, 5, False)
+    summary(model=model, input_size=[(3, 256, 256), (3, 25, 256)], batch_size=1, device='cuda')
     flops, params = profile(model, inputs=(A, B))
     print(f"模型的FLOPs: {flops / 1e9} G FLOPs")  # 以十亿FLOPs为单位显示
     print(f"模型的参数数量: {params / 1e6} M")
