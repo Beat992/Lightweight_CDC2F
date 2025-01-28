@@ -101,7 +101,7 @@ class FreFeaturePred(nn.Module):
         x = inverse_zigzag(x, dct_size=self.dct_size)
         x = x.view(bs_block, n, c, self.dct_size, self.dct_size)
         x = dct.block_idct(x).reshape(bs_block, n, c, -1)
-        x = x.permute(0, 2, 3, 1).reshape(-1, self.badns, n)
+        x = x.permute(0, 2, 3, 1).reshape(-1, self.bands, n)
         x = F.fold(x, kernel_size=(self.dct_size, self.dct_size), output_size=(self.block_size, self.block_size),
                    dilation=1, padding=0, stride=(self.dct_size, self.dct_size))
         x = x.view(bs_block, c, -1)

@@ -19,10 +19,10 @@ class FreInfoExchange(nn.Module):
         x1, x2 = self.transform(x1), self.transform(x2)
 
         x1, x2 = self.conv_toq(x1), self.conv_toq(x2) # 频段0: 6*h*w, 频段1: 6*h*w ...
-        attn_cat = self.cat_attn(   # 让x1和x2对应通道挨在一起然后分组卷积, 频段0: 6*2*h*w, 频段1 6*2*h*w
+        attn_cat = self.conv_attn_cat(   # 让x1和x2对应通道挨在一起然后分组卷积, 频段0: 6*2*h*w, 频段1 6*2*h*w
             torch.cat([x1.unsqueeze(2), x2.unsqueeze(2)], dim=2)\
                 .reshape(-1, 12 * self.bands, self.h, self.h))
-        attn_sub = self.conv_attn(x1 - x2)
+        attn_sub = self.conv_attn_sub(x1 - x2)
         attn = torch.sigmoid(attn_cat + attn_sub)
         x1 = self.conv_tov(x1) * (attn + 1)
         x2 = self.conv_tov(x2) * (attn + 1)
@@ -33,7 +33,7 @@ class FreInfoExchange(nn.Module):
     def transform(self, x):
         # bs_block, p_n, 6, bands
         x = x.permute(0, 3, 2, 1)
-        x = x.view(self.bs_block, -1, self.h, self.h)
+        x = x.reshape(self.bs_block, -1, self.h, self.h)
         return  x
 
     def transform_back(self, x):

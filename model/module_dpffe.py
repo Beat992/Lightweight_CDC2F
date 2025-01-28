@@ -29,7 +29,7 @@ class DualPerFreFeatureExtractor(nn.Module):
         self.band_group_conv0 = BandGroupConv(self.bands * 3, 16, 8, 1)
         self.band_group_conv1 = BandGroupConv(self.bands * 3, 4, 32, 1)
         self.band_group_conv2 = BandGroupConv(self.bands * 3, 1, 128, 1)
-        self.seblock = SEBlock(channel=self.bands * 3 * 2, reduction=6)
+        self.seblock = SEBlock(channel=self.bands * 3, reduction=6)
 
         self.dc_conv = nn.Conv2d(in_channels=3, out_channels=3, kernel_size=3, stride=1, padding=1)
         len_token = 3 * self.bands
@@ -110,8 +110,8 @@ class DualPerFreFeatureExtractor(nn.Module):
         bs_block, patch_num, ch, bands = x.shape
         x = x.reshape(bs_block, patch_num, -1)
         m = torch.clone(x)
-        x = self.embedding_layer(x)
-        x += self.pos_embedding
+        x = self.layer_embedding(x)
+        x += self.pos_embedding_enc
         x = self.encoder(x)
         m += self.pos_embedding_dec
         x = self.decoder(m, x)
@@ -149,12 +149,12 @@ class BandGroupConv(nn.Module):
     def __init__(self, in_channels, groups, groups_channels, num_layers):
         super(BandGroupConv, self).__init__()
         mid_channels = groups_channels * groups
-        module_list = nn.ModuleList([])
-        module_list.append(SimpleGroupConv(in_channels, mid_channels, groups))
+        self.module_list = nn.ModuleList([])
+        self.module_list.append(SimpleGroupConv(in_channels, mid_channels, groups))
         for _ in range(num_layers - 1):
-           module_list.append(SimpleGroupConv(mid_channels, mid_channels, groups))
+           self.module_list.append(SimpleGroupConv(mid_channels, mid_channels, groups))
 
-        module_list.append(SimpleGroupConv(mid_channels, in_channels//3, groups))
+        self.module_list.append(SimpleGroupConv(mid_channels, in_channels, groups))
 
     def forward(self, x):
         for layer in self.module_list:

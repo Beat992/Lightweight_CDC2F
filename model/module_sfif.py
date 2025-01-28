@@ -14,7 +14,7 @@ class SpaFreInteractionFusion(nn.Module):
         super(SpaFreInteractionFusion, self).__init__()
         self.block_size = block_size
         self.conv_channel_align_spa = nn.Sequential(
-            nn.Conv2d(in_channels=64, out_channels=32, kernel_size=3, stride=1, padding=1),
+            nn.Conv2d(in_channels=32, out_channels=32, kernel_size=3, stride=1, padding=1),
             nn.BatchNorm2d(32),
             nn.ReLU(inplace=True),
             nn.Conv2d(in_channels=32, out_channels=16, kernel_size=3, stride=1, padding=1),
@@ -53,9 +53,9 @@ class SpaFreInteractionFusion(nn.Module):
         )
 
     def _forward_single_domain(self, fs, fc, mc):
-        attn_cross = self.attn_cross_domain(fc)
+        attn_cross = self.conv_attn_cross_domain(fc)
         # attn_cross = torch.sigmoid(self.conv_prob_attn(torch.cat([mc, attn_cross], dim=1)))
-        attn_mc_guided_cross = torch.sigmoid(self.attn_mc_guided(mc + attn_cross))
+        attn_mc_guided_cross = torch.sigmoid(self.conv_attn_mc_guided(mc + attn_cross))
         attn_self = torch.sigmoid(self.conv_attn_self_domain(fs))
         fs = fs * (1 + 0.7 * attn_self + 0.3 * attn_mc_guided_cross)
         fc = self.conv_cross_add(fc)
@@ -64,7 +64,7 @@ class SpaFreInteractionFusion(nn.Module):
 
     def forward(self, X_spa, X_fre, mask_coarse):
         mc = mask_coarse.unsqueeze(1)
-        mc = F.interpolate(mc, self.block_size)
+        mc = F.interpolate(mc, self.block_size // 2)
 
         X_spa = self.conv_channel_align_spa(X_spa)
         X_fre = self.conv_channel_align_fre(X_fre)

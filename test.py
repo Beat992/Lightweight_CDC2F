@@ -8,20 +8,22 @@ from metrics import StreamSegMetrics
 from metrics.Metric_SeK import metric_SeK
 import numpy as np
 import configs as cfg
-from model import ResNetCD
+from model import CDC2F
 from utils.logger import create_logger
 
 
-def test():
+def test(model):
     log = create_logger(logger_output_dir=os.path.join(cfg.base_path, 'log'),
                         net_name=cfg.model_version + cfg.backbone,
                         dataset_name=cfg.dataset_name,
                         phase='test')
 
-    model = torch.load(os.path.join(cfg.base_path, f'prune/pruned_model_{cfg.backbone}.pth')).cuda()
-    # model = ResNetCD(cfg.backbone).cuda()
-    state_dict = torch.load(cfg.training_best_ckpt + '/LEVIR_CD_pruned_resnet502025-01-16-23-45-50_best.pth')
-    model.load_state_dict(state_dict['model_state'])
+    # model = CDC2F(cfg.backbone, stages_num=5, phase='test', backbone_pretrained=True).cuda()
+    # model = torch.load(os.path.join(cfg.base_path, f'prune/pruned_{cfg.backbone}_topk.pth')).cuda()
+    # model.phase = 'test'
+    # state_dict = torch.load(cfg.training_best_ckpt + '/LEVIR_CD_pruned_resnet18_best.pth')
+    # state_dict = torch.load(cfg.training_best_ckpt + '/LEVIR_CD_origin_resnet18_best.pth')
+    # model.load_state_dict(state_dict['model_state']);
 
     print(model)
 
@@ -35,6 +37,7 @@ def test():
     model.eval()
 
     with torch.no_grad():  # 修改
+        model.phase = 'test'
         for batch_idx, batch in enumerate(tqdm(test_data_loader)):
             inputs1, input2, mask = batch
             inputs1, inputs2, mask = inputs1.cuda(), input2.cuda(), mask.cuda()

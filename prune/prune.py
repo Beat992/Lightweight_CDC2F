@@ -1,3 +1,4 @@
+import os
 import re
 
 import torch
@@ -9,7 +10,7 @@ from similarity import similarity_for_single_layer
 from dataset import get_data_loader
 from torchsummary import summary
 from thop import profile
-
+from model import CDC2F
 resnet_blocks = {
     'resnet18': [2, 2, 2, 2],
     'resnet34': [3, 4, 6, 3],
@@ -22,7 +23,7 @@ def prune(model, layer_groups, prune_strategy='topk'):
     :param prune_strategy: 按topk剪枝还是按照平均值剪枝
     """
     DG = tp.DependencyGraph()
-    DG.build_dependency(model, example_inputs=(torch.randn(1, 3, 256, 256), torch.randn(1, 3, 256, 256)))
+    DG.build_dependency(model, example_inputs=(torch.randn(1, 3, 256, 256).cuda(), torch.randn(1, 3, 256, 256).cuda()))
     for layer_group in layer_groups:
         for layer, channel in layer_group.items():
             prune_group = DG.get_pruning_group(layer, tp.prune_conv_out_channels, idxs=channel)
@@ -43,17 +44,21 @@ def params_flops(model):
 if __name__ == '__main__':
     prune_strategy = 'topk'
 
-    prune_factor1 = 0.2
-    prune_factor2 = 0.2
+    prune_factor1 = 0.3
+    prune_factor2 = 0.3
 
-    model = ResNetCD(cfg.backbone).eval().cuda()
+    model = CDC2F(cfg.backbone, stages_num=5, phase='train', backbone_pretrained=True).eval().cuda()
+    print(model)
     # params_flops(model)
-    state_dict = torch.load(cfg.training_best_ckpt + '/LEVIR_CD__resnet50_best.pth')
+    state_dict = torch.load(os.path.join(cfg.training_best_ckpt, 'LEVIR_CD_origin_resnet18_best.pth'))
     model.load_state_dict(state_dict['model_state'])
-    train_loader = get_data_loader(cfg.data_path, 'train', 16, cfg.train_txt_path)
+    val_loader = get_data_loader(cfg.data_path, 'val', 16, cfg.val_txt_path)
     register_hook(model)
-    pattern1 = r'^resnet\.layer\d+\.\d+\.conv[12]$'
-    pattern2 = r'^resnet\.layer\d+\.\d+\.conv3$'
+    pattern1 = r'^resnet\.layer\d+\.\d+\.conv1$'
+    pattern2 = r'^resnet\.layer\d+\.\d+\.conv2$'
+
+    # pattern1 = r'^resnet\.layer\d+\.\d+\.conv[12]$'
+    # pattern2 = r'^resnet\.layer\d+\.\d+\.conv3$'
     group_single = {}
     group_shortcut = {}
     for layer, name in layer_dict.items():
@@ -73,7 +78,7 @@ if __name__ == '__main__':
     conv1_dist1 = {layer: [] for layer in group_single.keys()}
     conv2_dist2 = [[], [], [], []]
     model.zero_grad()
-    for idx, batch in enumerate(tqdm(train_loader)):
+    for idx, batch in enumerate(tqdm(val_loader)):
         outputs_clear()
         img1, img2, _ = batch
         img1 = img1.cuda()
@@ -128,7 +133,8 @@ if __name__ == '__main__':
             idx = [i for i, x in enumerate(channel_dist) if x > mean + std]
         channel_idx2.append(idx.tolist())
 
-    pattern3 = r'^resnet\.layer\d+\.1\.conv3$'
+    # pattern3 = r'^resnet\.layer\d+\.1\.conv3$'
+    pattern3 = r'^resnet\.layer\d+\.1\.conv2$'
     conv2_group_ = []
     for name, module in group_shortcut.items():
         if re.match(pattern3, name):
@@ -136,6 +142,6 @@ if __name__ == '__main__':
     layer_channel2 = dict(zip(conv2_group_, channel_idx2))
 
     remove_hook(handles)
-    pruned_model = prune(model.cpu(), [layer_channel1, layer_channel2], 'topk')
+    pruned_model = prune(model, [layer_channel1, layer_channel2], 'topk')
 
     # params_flops(pruned_model)

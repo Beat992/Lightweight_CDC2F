@@ -3,14 +3,14 @@ import torch.nn as nn
 import torch.nn.functional as F
 from model import *
 
-class Network(nn.Module):
+class CDC2F(nn.Module):
     def __init__(self,
-                 backbone='resnet18', stages_num=4,
-                 phase='val', dct_size=4, block_size=32,
+                 backbone='resnet18', stages_num=4, backbone_pretrained=False,
+                 threshold=0.5, phase='val', dct_size=4, block_size=32,
                  encoder_depth=1, encoder_heads=8, encoder_dim=8, decoder_depth=1,
                  decoder_heads=4, decoder_dim=8,
                  dropout=0.5):
-        super(Network, self).__init__()
+        super(CDC2F, self).__init__()
         if stages_num == 4:
             if backbone == 'resnet18':
                 self.channel = 512
@@ -21,17 +21,18 @@ class Network(nn.Module):
                 self.channel = 1024
             else:
                 self.channel = 3904
+        self.threshold = threshold
         self.dct_patch_size = dct_size
         self.block_size = block_size
         self.block_num = (256 // block_size) ** 2
         self.bands = dct_size ** 2
         self.phase = phase
-        self.coarse_detection = CoarseDetection(backbone)
+        self.coarse_detection = CoarseDetection(backbone, backbone_pretrained)
         self.dpffe = DualPerFreFeatureExtractor(dct_size, block_size,
                                                 encoder_depth, encoder_heads, encoder_dim,
                                                 decoder_depth, decoder_heads, decoder_dim, dropout=dropout)
         self.fie = FreInfoExchange(block_size, dct_size)
-        self.fph = FreFeaturePred(dct_size, block_size)
+        self.fph = FreFeaturePred(phase, dct_size, block_size)
         self.sfif = SpaFreInteractionFusion(block_size)
         self.conv_fused_feature = nn.Sequential(
             nn.Conv2d(in_channels=32, out_channels=64, kernel_size=3, stride=1, padding=1),
@@ -64,7 +65,6 @@ class Network(nn.Module):
         '''
         fine_idx, mask = self.get_filter_idx(coarse_score)
         coarse_prob_retaining = self.get_prob(coarse_score, fine_idx)
-        fine_idx = torch.arange(0, b * self.block_num).cuda()
         if fine_idx.numel() == 0:     # only possible happen in val or test, so return coarse score as fine
             return coarse_score
         '''
@@ -72,7 +72,7 @@ class Network(nn.Module):
         '''
         x = torch.cat([x0, x1], dim=1)    # N, C+C, H, H
         blocks = cut(x, self.block_size)          # N, L, C+C, block_size, block_size
-        b0, b1 = self.filtering_and_dct(blocks, fine_idx).chunk(2, dim=2)
+        b0, b1 = self.filter_and_dct(blocks, fine_idx).chunk(2, dim=2)
         '''
         <---------- stage two --> fine detection-------->
         '''
@@ -81,22 +81,29 @@ class Network(nn.Module):
         '''
         <---------- extra task --> frequency domain pred---------->
         '''
-        fre_score, f_fre = self.fph(f0_fre, f1_fre)       # bs16, 1, 64, 64
+        fre_score, f_fre = self.fph(f0_fre, f1_fre)       # bs_block, 1, self.block_size, self.block_size
+        fre_score = fre_score.view(b, self.block_num, -1)
+        if fre_score is not None:
+            fre_score = size_restore(fre_score, input_size=self.block_size, output_size=256)
         '''
         < ---------- dual domain feature interaction fusion---------->
         '''
         f0_spa, f1_spa = self.filter_spa_feature(f0_spa, f1_spa, fine_idx)
         f0_fre, f1_fre = f_fre.chunk(2, dim=1)  # bs_block, c, self.block_size, self.block_size
-        f0 = self.sfif(f0_spa, f0_fre, coarse_prob_retaining, fine_idx)
-        f1 = self.sfif(f1_spa, f1_fre, coarse_prob_retaining, fine_idx)
+        f0 = self.sfif(f0_spa, f0_fre, coarse_prob_retaining)
+        f1 = self.sfif(f1_spa, f1_fre, coarse_prob_retaining)
 
         f0, f1 = self.conv_fused_feature(f0), self.conv_fused_feature(f1)
         fine_score_filtered = torch.abs(f0 - f1)
         fine_score_filtered = self.pred_head_fine(fine_score_filtered)
-
         fine_score = torch.zeros(b * self.block_num, 1, self.block_size, self.block_size).to(fine_score_filtered.dtype).cuda()
-        fine_score[fine_idx, :, :, :] = fine_score_filtered
-        fine_score = size_restore(fine_score.view(b, -1, self.block_size**2), self.block_size, 256)
+
+        if self.phase == 'train':
+            fine_score_filtered = fine_score_filtered.view(b, self.block_num, -1)
+            fine_score_filtered = size_restore(fine_score_filtered, self.block_size, 256)
+        else:
+            fine_score[fine_idx, :, :, :] = fine_score_filtered
+            fine_score = size_restore(fine_score.view(b, -1, self.block_size**2), self.block_size, 256)
 
         if self.phase == 'train':
             return coarse_score, fre_score, fine_score_filtered, fine_idx
@@ -105,9 +112,10 @@ class Network(nn.Module):
 
     def filter_spa_feature(self, f0_spa, f1_spa, idx):
         f_spa = torch.cat([f0_spa, f1_spa], dim=1)
-        f_spa = F.unfold(f_spa, kernel_size=(self.block_size, self.block_size), padding=0,
-                         stride=(self.block_size, self.block_size))
-        f_spa = f_spa.transpose(1, 2).view(f_spa.shape[0], -1, self.block_size, self.block_size)
+        ch = f_spa.shape[1]
+        f_spa = F.unfold(f_spa, kernel_size=(self.block_size // 2, self.block_size // 2), padding=0,
+                         stride=(self.block_size // 2, self.block_size // 2))
+        f_spa = f_spa.transpose(1, 2).reshape(-1, ch, self.block_size // 2, self.block_size // 2)
         f_spa = torch.index_select(f_spa, 0, idx)
         return f_spa.chunk(2, dim=1)
 
@@ -120,10 +128,10 @@ class Network(nn.Module):
 
     def get_filter_idx(self, coarse_score):
         coarse_prob = torch.sigmoid(coarse_score)
-        coarse_mask = torch.tensor(coarse_prob > self.threshold)
+        coarse_mask = (coarse_prob > self.threshold).float()
         # ps: only filtering when validation or testing, using all block when training
         idx = torch.ones(coarse_mask.shape[0] * self.block_num).cuda()
-        if self.phase == 'val' or 'test':
+        if self.phase == 'val' or self.phase == 'test':
             idx = F.unfold(coarse_mask, kernel_size=(self.block_size, self.block_size),
                                   padding=0, stride=(self.block_size, self.block_size))
             idx = (idx.transpose(1, 2).sum(dim=2)).flatten()
@@ -147,8 +155,8 @@ class Network(nn.Module):
         :return: x的dct并且做zigzag展开成一维向量, shape: (NB) * patch_num * C * dct_size^2
         """
         b, l, c, block_size, block_size = x.shape
+        x = x.reshape(-1, c, block_size, block_size)
         x = torch.index_select(x, dim=0, index=fine_idx)
-        x = x.view(-1, c, block_size, block_size)
         x = apply_dct(x, self.dct_patch_size)
         return x
 
