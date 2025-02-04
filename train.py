@@ -9,6 +9,7 @@ def train(logger, train_loader, val_loader, model, criterion, optimizer, metrics
     model.train()
     for epoch in range(num_epoch):
         model.phase = 'train'
+        model.fph.phase = 'train'
         for idx, batch in enumerate(tqdm(train_loader)):
             img1, img2, label = batch
             img1, img2, label = img1.to(device), img2.to(device), label.to(device)
