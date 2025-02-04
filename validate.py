@@ -13,6 +13,7 @@ def validate(model, val_dataloader, metrics, log, epoch, writer):
 
     with torch.no_grad():  # 修改
         model.phase = 'val'
+        model.fph.phase = 'val'
         for batch_idx, batch in enumerate(val_dataloader):
             inputs1, input2, mask = batch
             inputs1, inputs2, mask = inputs1.cuda(), input2.cuda(), mask.cuda()
