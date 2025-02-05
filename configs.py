@@ -14,6 +14,12 @@ train_txt_path = None
 val_txt_path = None
 test_txt_path = None
 
+model_state_dict = {
+    'resnet18': os.path.join(base_path, 'pretrained_weight/resnet18-5c106cde.pth'),
+    'resnet34': os.path.join(base_path, 'pretrained_weight/resnet34-333f7ec4.pth'),
+    'resnet50': os.path.join(base_path, 'pretrained_weight/resnet50-19c8e357.pth'),
+    'resnet101': os.path.join(base_path, 'pretrained_weight/resnet101-5d3b4d8f.pth'),
+}
 
 def init(args):
     global ckpt_save_name, train_txt_path, val_txt_path, test_txt_path, ckpt_save_path

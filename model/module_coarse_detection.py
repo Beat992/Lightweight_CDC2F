@@ -5,13 +5,6 @@ import torch.nn.functional as F
 from model.backbones import resnet
 import configs as cfg
 
-model_state_dict = {
-    'resnet18': os.path.join(cfg.base_path, 'pretrained_weight/resnet18-5c106cde.pth'),
-    'resnet34': os.path.join(cfg.base_path, 'pretrained_weight/resnet34-333f7ec4.pth'),
-    'resnet50': os.path.join(cfg.base_path, 'pretrained_weight/resnet50-19c8e357.pth'),
-    'resnet101': os.path.join(cfg.base_path, 'pretrained_weight/resnet101-5d3b4d8f.pth'),
-}
-
 backbone_total_channels = {
     'resnet18': 1024,
     'resnet34': 1024,
@@ -90,7 +83,7 @@ class CoarseDetection(nn.Module):
         return output
 
     def load_pretrained_backbone(self):
-        state_dict = torch.load(model_state_dict[self.backbone])
+        state_dict = torch.load(cfg.model_state_dict[self.backbone])
         self.resnet.load_state_dict(state_dict)
 
     def forward(self, x0, x1):
