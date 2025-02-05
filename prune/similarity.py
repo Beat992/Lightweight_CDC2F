@@ -19,5 +19,6 @@ def similarity_for_single_layer(a, b, similarity_type='cos'):
     # 计算欧式距离
     elif similarity_type == 'euc':
         dist = torch.norm(a - b, p=2, dim=-1)
-        dist = torch.sum(dist, dim=0)
+
+    dist = torch.sum(dist, dim=0)
     return dist
