@@ -15,9 +15,10 @@ resnet_blocks = {
     'resnet18': [2, 2, 2, 2],
     'resnet34': [3, 4, 6, 3],
     'resnet50': [3, 4, 6, 3],
+    'resnet101': [3, 4, 23, 3],
 }
 
-def prune(model, layer_groups, prune_strategy='topk'):
+def prune(model, layer_groups):
     """
     :param layer_groups: 将所有卷积层分组，每组的格式为: layers-channle idx
     :param prune_strategy: 按topk剪枝还是按照平均值剪枝
@@ -30,7 +31,7 @@ def prune(model, layer_groups, prune_strategy='topk'):
             print(prune_group)
             prune_group.prune()
     print(model)
-    torch.save(model, f'pruned_{cfg.backbone}_{prune_strategy}.pth')
+    return model
 
 def params_flops(model):
     summary(model, [(3, 256, 256), (3, 256, 256)])
@@ -44,21 +45,22 @@ def params_flops(model):
 if __name__ == '__main__':
     prune_strategy = 'topk'
 
-    prune_factor1 = 0.3
-    prune_factor2 = 0.3
+    prune_factor1 = 0.9
+    prune_factor2 = 0.9
 
     model = CDC2F(cfg.backbone, stages_num=5, phase='train', backbone_pretrained=True).eval().cuda()
     print(model)
     # params_flops(model)
-    state_dict = torch.load(os.path.join(cfg.training_best_ckpt, 'LEVIR_CD_origin_resnet18_best.pth'))
+    state_dict = torch.load(os.path.join(cfg.training_best_ckpt, 'LEVIR_CD_origin_resnet101_best.pth'))
     model.load_state_dict(state_dict['model_state'])
     val_loader = get_data_loader(cfg.data_path, 'val', 16, cfg.val_txt_path)
     register_hook(model)
-    pattern1 = r'^resnet\.layer\d+\.\d+\.conv1$'
-    pattern2 = r'^resnet\.layer\d+\.\d+\.conv2$'
 
-    # pattern1 = r'^resnet\.layer\d+\.\d+\.conv[12]$'
-    # pattern2 = r'^resnet\.layer\d+\.\d+\.conv3$'
+    # pattern1 = r'^resnet\.layer\d+\.\d+\.conv1$'
+    # pattern2 = r'^resnet\.layer\d+\.\d+\.conv2$'
+
+    pattern1 = r'^resnet\.layer\d+\.\d+\.conv[12]$'
+    pattern2 = r'^resnet\.layer\d+\.\d+\.conv3$'
     group_single = {}
     group_shortcut = {}
     for layer, name in layer_dict.items():
@@ -115,11 +117,12 @@ if __name__ == '__main__':
         channel_dist = torch.tensor(channel_dist)
         if prune_strategy == 'topk':
             _, idx = torch.topk(channel_dist, round(len(channel_dist) * prune_factor1), largest=False)
+            idx = idx.tolist()
         elif prune_strategy == 'std':
             mean = torch.mean(channel_dist)
             std = torch.std(channel_dist)
-            idx = [i for i, x in enumerate(channel_dist) if x > mean + std]
-        channel_idx1.append(idx.tolist())
+            idx = [i for i, x in enumerate(channel_dist) if x > mean]
+        channel_idx1.append(idx)
     layer_channel1 = dict(zip([module for _, module in group_single.items()], channel_idx1))
 
     channel_idx2 = []
@@ -127,14 +130,14 @@ if __name__ == '__main__':
         channel_dist = torch.tensor(channel_dist)
         if prune_strategy == 'topk':
             _, idx = torch.topk(channel_dist, round(len(channel_dist) * prune_factor2), largest=False)
+            idx = idx.tolist()
         elif prune_strategy =='mean':
             mean = torch.mean(channel_dist)
             std = torch.std(channel_dist)
-            idx = [i for i, x in enumerate(channel_dist) if x > mean + std]
-        channel_idx2.append(idx.tolist())
-
-    # pattern3 = r'^resnet\.layer\d+\.1\.conv3$'
-    pattern3 = r'^resnet\.layer\d+\.1\.conv2$'
+            idx = [i for i, x in enumerate(channel_dist) if x > mean]
+        channel_idx2.append(idx)
+    pattern3 = r'^resnet\.layer\d+\.1\.conv3$'
+    # pattern3 = r'^resnet\.layer\d+\.1\.conv2$'
     conv2_group_ = []
     for name, module in group_shortcut.items():
         if re.match(pattern3, name):
@@ -142,6 +145,10 @@ if __name__ == '__main__':
     layer_channel2 = dict(zip(conv2_group_, channel_idx2))
 
     remove_hook(handles)
-    pruned_model = prune(model, [layer_channel1, layer_channel2], 'topk')
-
+    pruned_model = prune(model, [layer_channel1, layer_channel2])
+    if prune_strategy == 'topk':
+        pruned_model_name =  f'pruned_{cfg.backbone}_top{int(prune_factor1*100)}.pth'
+    else :
+        pruned_model_name = f'pruned_{cfg.backbone}_mean_std.pth'
+    torch.save(pruned_model, pruned_model_name)
     # params_flops(pruned_model)

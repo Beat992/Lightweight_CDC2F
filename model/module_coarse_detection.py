@@ -9,12 +9,14 @@ model_state_dict = {
     'resnet18': os.path.join(cfg.base_path, 'pretrained_weight/resnet18-5c106cde.pth'),
     'resnet34': os.path.join(cfg.base_path, 'pretrained_weight/resnet34-333f7ec4.pth'),
     'resnet50': os.path.join(cfg.base_path, 'pretrained_weight/resnet50-19c8e357.pth'),
+    'resnet101': os.path.join(cfg.base_path, 'pretrained_weight/resnet101-5d3b4d8f.pth'),
 }
 
 backbone_total_channels = {
     'resnet18': 1024,
     'resnet34': 1024,
     'resnet50': 3904,
+    'resnet101': 3904,
 }
 
 class CoarseDetection(nn.Module):
@@ -27,6 +29,8 @@ class CoarseDetection(nn.Module):
             self.resnet = resnet.resnet34()
         elif backbone == 'resnet50':
             self.resnet = resnet.resnet50()
+        elif backbone =='resnet101':
+            self.resnet = resnet.resnet101(pretrained=True)
         if pretrained:
             self.load_pretrained_backbone()
 
