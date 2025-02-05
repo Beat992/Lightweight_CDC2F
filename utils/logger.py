@@ -18,7 +18,7 @@ def create_logger(logger_output_dir, net_name, dataset_name, phase):
 
     # <---------log config--------->
     time_str = time.strftime('%Y-%m-%d-%H-%M')
-    log_file = '{}_{}_{}.log'.format(net_name, time_str, phase)
+    log_file = '{}_{}.log'.format( time_str, phase)
     final_log_file = final_output_dir / log_file
     logging.basicConfig(filename=str(final_log_file),
                         format='%(asctime)-15s %(message)s',
