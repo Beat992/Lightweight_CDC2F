@@ -29,6 +29,7 @@ if __name__ == '__main__':
                                  dataset_name=args.dataset,
                                  phase='train')
     train_logger.info(args)
+    train_logger.info("save path: {}".format(cfg.ckpt_save_path))
 
     train_data_loader = get_data_loader(cfg.data_path, 'train', batch_size=args.batch_size, txt_path=cfg.train_txt_path)
     val_data_loader = get_data_loader(cfg.data_path, 'val', batch_size=args.batch_size, txt_path=cfg.val_txt_path, shuffle=False)
