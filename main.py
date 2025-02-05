@@ -15,8 +15,9 @@ if __name__ == '__main__':
                         help='backbone, include resnet18/34/50/101, default: resnet50')
     parser.add_argument('--model_version', type=str, default='origin',
                         help='model version, origin / pruned (default: origin)')
-    parser.add_argument('--prune_strategy', type=str, default='topk',
+    parser.add_argument('--prune_strategy', type=str, default=None,
                         help='prune strategy, topk / mean&std')
+    parser.add_argument('--prune_factor', type=float, default=None)
     parser.add_argument('--num_epochs', type=int, default=200)
     parser.add_argument('--batch_size', type=int, default=16)
     parser.add_argument('--dataset', type=str, default='LEVIR_CD')
@@ -27,6 +28,7 @@ if __name__ == '__main__':
                                  net_name=f'{args.model_version}_{args.backbone}',
                                  dataset_name=args.dataset,
                                  phase='train')
+    train_logger.info(args)
 
     train_data_loader = get_data_loader(cfg.data_path, 'train', batch_size=args.batch_size, txt_path=cfg.train_txt_path)
     val_data_loader = get_data_loader(cfg.data_path, 'val', batch_size=args.batch_size, txt_path=cfg.val_txt_path, shuffle=False)

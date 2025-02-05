@@ -3,7 +3,7 @@ import os
     # <--------path config--------->
 base_path = '/home/zwb/prune_resnet'
 data_path = {
-    'levir3167': '/home/pan2/zwb/LEVIR-CD-256-NEW', # 3167
+    'levir-3167': '/home/pan2/zwb/LEVIR-CD-256-NEW', # 3167
     'levir': '/home/pan2/zwb/LEVIR_CD-256', # 3167
     'whu': '/home/pan2/zwb/WHU',
     'svcd': '/home/pan2/zwb/ChangeDetectionDataset'
