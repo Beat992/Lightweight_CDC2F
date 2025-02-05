@@ -149,6 +149,6 @@ if __name__ == '__main__':
     if args.prune_strategy == 'topk':
         pruned_model_name =  f'pruned_{args.backbone}_top{int(args.prune_factor*100)}.pth'
     else :
-        pruned_model_name = f'pruned_{args.backbone}_mean_std.pth'
+        pruned_model_name = f'pruned_{args.backbone}_mean.pth'
     torch.save(pruned_model, pruned_model_name)
     # params_flops(pruned_model)
