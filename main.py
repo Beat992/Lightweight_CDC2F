@@ -20,7 +20,7 @@ if __name__ == '__main__':
     parser.add_argument('--prune_factor', type=float, default=None)
     parser.add_argument('--num_epochs', type=int, default=200)
     parser.add_argument('--batch_size', type=int, default=16)
-    parser.add_argument('--dataset', type=str, default='LEVIR_CD')
+    parser.add_argument('--dataset', type=str, default='levir-3167')
     args = parser.parse_args()
     cfg.init(args)
 
@@ -31,9 +31,9 @@ if __name__ == '__main__':
     train_logger.info(args)
     train_logger.info("save path: {}".format(cfg.ckpt_save_path))
 
-    train_data_loader = get_data_loader(cfg.data_path, 'train', batch_size=args.batch_size, txt_path=cfg.train_txt_path)
-    val_data_loader = get_data_loader(cfg.data_path, 'val', batch_size=args.batch_size, txt_path=cfg.val_txt_path, shuffle=False)
-    test_data_loader = get_data_loader(cfg.data_path, 'test', batch_size=args.batch_size, txt_path=cfg.test_txt_path)
+    train_data_loader = get_data_loader(cfg.data_path[args.dataset], 'train', batch_size=args.batch_size, txt_path=cfg.train_txt_path)
+    val_data_loader = get_data_loader(cfg.data_path[args.dataset], 'val', batch_size=args.batch_size, txt_path=cfg.val_txt_path, shuffle=False)
+    test_data_loader = get_data_loader(cfg.data_path[args.dataset], 'test', batch_size=args.batch_size, txt_path=cfg.test_txt_path)
 
     metrics = StreamSegMetrics(2)
 
