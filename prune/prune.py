@@ -51,8 +51,10 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--backbone', type=str, default='resnet50',
                         help='backbone, include resnet18/34/50/101, default: resnet50')
+    parser.add_argument('--dataset', type=str, default='levir')
     parser.add_argument('--prune_strategy', type=str, default='topk',
                         help='prune strategy, topk / mean')
+    parser.add_argument('--sim_type', type=str, default='euc')
     parser.add_argument('--prune_factor', type=float, default=0.5)
     parser.add_argument('--pth_path', type=str)
     args = parser.parse_args()
@@ -60,12 +62,12 @@ if __name__ == '__main__':
     # ----- model -----
     model = CDC2F(args.backbone, stages_num=5, phase='val', backbone_pretrained=True).eval().cuda()
     print(model)
-    state_dict = torch.load(args.ph_path)
+    state_dict = torch.load(args.pth_path)
     model.load_state_dict(state_dict['model_state'])
     register_hook(model)
 
     # ----- dataset -----
-    val_loader = get_data_loader(cfg.data_path, 'val', 16, cfg.val_txt_path, drop_last=False)
+    val_loader = get_data_loader(cfg.data_path[args.dataset], 'val', 2, cfg.val_txt_path, drop_last=False)
 
     # ----- prepare layers -----
     if args.backbone in ['resnet18', 'resnet34']:
@@ -108,7 +110,7 @@ if __name__ == '__main__':
 
             # ----- dist of single layer -----
             for name, layer in group_single.items():
-                dist = similarity_for_single_layer(layer_outputs[name][0], layer_outputs[name][1], 'cos')
+                dist = similarity_for_single_layer(layer_outputs[name][0], layer_outputs[name][1], args.sim_type)
                 if len(dist_single[name]) == 0:
                     dist_single[name] = dist
                 else:
@@ -122,7 +124,7 @@ if __name__ == '__main__':
                 dists = []
                 for cur_pos in range(cur_layer, end_layer):
                     layer_name = layer_list[cur_pos]
-                    dist = similarity_for_single_layer(layer_outputs[layer_name][0], layer_outputs[layer_name][1], 'euc')
+                    dist = similarity_for_single_layer(layer_outputs[layer_name][0], layer_outputs[layer_name][1], args.sim_type)
                     dists.append(dist)
                 dist_sum = [sum(x) for x in zip(*dists)]
                 cur_layer = end_layer
@@ -140,15 +142,15 @@ if __name__ == '__main__':
     for name, module in group_shortcut.items():
         if re.match(shortcut_layer_last, name):
             shortcut_prune_group.append(module)
-    layer_channel2 = dict(zip(shortcut_layer_last, channel_idx2))
+    layer_channel2 = dict(zip(shortcut_prune_group, channel_idx2))
 
     remove_hook(handles) # remove hook, or the next inference will have problem
 
     # ----- prune -----
     pruned_model = prune(model, [layer_channel1, layer_channel2])
     if args.prune_strategy == 'topk':
-        pruned_model_name =  f'pruned_{args.backbone}_top{int(args.prune_factor*100)}.pth'
+        pruned_model_name =  f'pruned_{args.backbone}_{args.sim_type}_top{int(args.prune_factor*100)}_{args.dataset}.pth'
     else :
-        pruned_model_name = f'pruned_{args.backbone}_mean.pth'
+        pruned_model_name = f'pruned_{args.backbone}_{args.sim_type}_mean_{args.dataset}.pth'
     torch.save(pruned_model, pruned_model_name)
     # params_flops(pruned_model)
