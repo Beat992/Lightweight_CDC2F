@@ -19,13 +19,13 @@ model_state_dict = {
     'resnet34': os.path.join(base_path, 'pretrained_weight/resnet34-333f7ec4.pth'),
     'resnet50': os.path.join(base_path, 'pretrained_weight/resnet50-19c8e357.pth'),
     'resnet101': os.path.join(base_path, 'pretrained_weight/resnet101-5d3b4d8f.pth'),
+
 }
 
 def init(args):
     global ckpt_save_name, train_txt_path, val_txt_path, test_txt_path, ckpt_save_path
 
     ckpt_save_name = f"{args.dataset}_{args.model_version}_{args.backbone}.pth"
-
     train_txt_path = os.path.join(data_path[args.dataset], 'txt/train.txt')       # 修改
     val_txt_path = os.path.join(data_path[args.dataset], 'txt/val.txt')
     test_txt_path = os.path.join(data_path[args.dataset], 'txt/test.txt')
@@ -34,4 +34,8 @@ def init(args):
     if not os.path.exists(training_best_ckpt):
         os.mkdir(training_best_ckpt)
     ckpt_save_path = os.path.join(training_best_ckpt, ckpt_save_name)
-
+    cnt = 0
+    while os.path.exists(ckpt_save_path):
+        cnt += 1
+        # 在原来的文件名后面加一个数字版本号
+        ckpt_save_path = os.path.join(training_best_ckpt, ckpt_save_name.split('.')[0] + f'_v{cnt}' + '.pth')
