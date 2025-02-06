@@ -7,6 +7,7 @@ from test import test
 from train import train
 from metrics import StreamSegMetrics
 from model import CDC2F
+from model.network_fre import PureFreCDNet
 from utils.logger import create_logger
 
 if __name__ == '__main__':
@@ -14,7 +15,7 @@ if __name__ == '__main__':
     parser.add_argument('--backbone', type=str, default='resnet50',
                         help='backbone, include resnet18/34/50/101, default: resnet50')
     parser.add_argument('--model_version', type=str, default='origin',
-                        help='model version, origin / pruned (default: origin)')
+                        help='model version, origin / pruned / purn_fre(default: origin)')
     parser.add_argument('--prune_strategy', type=str, default=None,
                         help='prune strategy, topk / mean&std')
     parser.add_argument('--prune_factor', type=float, default=None)
@@ -40,10 +41,12 @@ if __name__ == '__main__':
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     if args.model_version == 'origin':
         model = CDC2F(args.backbone, stages_num=5, phase='train', backbone_pretrained=True).to(device)
-    else :
+    elif args.model_version == 'pruned' :
         model = torch.load(os.path.join(cfg.base_path, f'prune/pruned_{args.backbone}_{args.prune_strategy}.pth')).to(device)
-
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
+    else :
+        model = PureFreCDNet(0.5, 'train', dropout=0).to(device)
+    # optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
+    optimizer = torch.optim.SGD(model.parameters(), lr=1e-3, momentum=0.9, weight_decay=1e-4)
     criterion = torch.nn.BCELoss()
 
     train(model, train_data_loader, val_data_loader, criterion, optimizer, metrics, args.num_epochs, device, train_logger)

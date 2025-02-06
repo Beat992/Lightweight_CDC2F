@@ -5,8 +5,8 @@ from model import *
 class PureFreCDNet(nn.Module):
     def __init__(self,
                  threshold=0.5, phase='val', dct_size=4, block_size=32,
-                 encoder_depth=1, encoder_heads=8, encoder_dim=8, decoder_depth=1,
-                 decoder_heads=4, decoder_dim=8,
+                 encoder_depth=1, encoder_heads=8, encoder_dim=8,
+                 decoder_depth=1, decoder_heads=4, decoder_dim=8,
                  dropout=0.5):
         super(PureFreCDNet, self).__init__()
         self.batch_size = None
@@ -15,7 +15,6 @@ class PureFreCDNet(nn.Module):
         self.block_size = block_size
         self.block_num = (256 // block_size) ** 2
         self.bands = dct_size ** 2
-        self.phase = phase
         self.dpffe = DualPerFreFeatureExtractor(dct_size, block_size,
                                                 encoder_depth, encoder_heads, encoder_dim,
                                                 decoder_depth, decoder_heads, decoder_dim, dropout=dropout)
