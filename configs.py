@@ -13,6 +13,7 @@ ckpt_save_path = None
 train_txt_path = None
 val_txt_path = None
 test_txt_path = None
+monitor_path = None
 
 model_state_dict = {
     'resnet18': os.path.join(base_path, 'pretrained_weight/resnet18-5c106cde.pth'),
@@ -23,7 +24,7 @@ model_state_dict = {
 }
 
 def init(args):
-    global ckpt_save_name, train_txt_path, val_txt_path, test_txt_path, ckpt_save_path
+    global ckpt_save_name, train_txt_path, val_txt_path, test_txt_path, ckpt_save_path, monitor_path
 
     ckpt_save_name = f"{args.dataset}_{args.model_version}_{args.backbone}.pth"
     train_txt_path = os.path.join(data_path[args.dataset], 'txt/train.txt')       # 修改
@@ -39,3 +40,7 @@ def init(args):
         cnt += 1
         # 在原来的文件名后面加一个数字版本号
         ckpt_save_path = os.path.join(training_best_ckpt, ckpt_save_name.split('.')[0] + f'_v{cnt}' + '.pth')
+
+    monitor_path = os.path.join(base_path, 'monitor')
+    if not os.path.exists(monitor_path):
+        os.mkdir(monitor_path)

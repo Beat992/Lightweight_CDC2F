@@ -2,7 +2,7 @@ import torch
 import configs as cfg
 from validate import validate
 
-def train(model, train_loader, val_loader, criterion, optimizer, metrics, num_epoch, device, logger,):
+def train(model, train_loader, val_loader, criterion, optimizer, metrics, num_epoch, device, logger, monitor):
     best_metric = 0
     best_epoch = 0
     model.train()
@@ -21,6 +21,10 @@ def train(model, train_loader, val_loader, criterion, optimizer, metrics, num_ep
             loss3 = criterion(torch.sigmoid(fre_score), label)
             loss = loss1 + loss2 + loss3
             # print(loss)
+            monitor.add_scalar('train/loss1', loss1, epoch)
+            monitor.add_scalar('train/loss2', loss2, epoch)
+            monitor.add_scalar('train/loss3', loss3, epoch)
+
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()

@@ -4,10 +4,12 @@ import configs as cfg
 import torch
 from dataset import get_data_loader
 from test import test
+
 from train import train
 from metrics import StreamSegMetrics
 from model import CDC2F
 from utils.logger import create_logger
+from utils.monitor import create_summery_writer
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -36,6 +38,9 @@ if __name__ == '__main__':
     test_data_loader = get_data_loader(cfg.data_path, 'test', batch_size=args.batch_size, txt_path=cfg.test_txt_path)
 
     metrics = StreamSegMetrics(2)
+    monitor = create_summery_writer(log_output_dir=os.path.join(cfg.base_path, 'monitor'),
+                                    net_name=f'{args.model_version}_{args.backbone}',
+                                    dataset_name=args.dataset)
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     if args.model_version == 'origin':
@@ -46,6 +51,7 @@ if __name__ == '__main__':
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
     criterion = torch.nn.BCELoss()
 
-    train(model, train_data_loader, val_data_loader, criterion, optimizer, metrics, args.num_epochs, device, train_logger)
+    train(model, train_data_loader, val_data_loader, criterion, optimizer, metrics, args.num_epochs, device, train_logger, monitor)
+    monitor.close()
     test(model, test_data_loader, metrics, None, args)
 
