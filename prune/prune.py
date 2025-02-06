@@ -1,6 +1,7 @@
 import argparse
 import re
-
+import sys
+sys.path.append('..')
 import torch_pruning as tp
 from tqdm import tqdm
 
