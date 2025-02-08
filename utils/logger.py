@@ -3,8 +3,7 @@ import sys
 import time
 from pathlib import Path
 
-
-def create_logger(logger_output_dir, net_name, dataset_name, phase):
+def create_logger(logger_name, logger_output_dir, net_name, dataset_name, phase, level=logging.INFO):
     root_output_dir = Path(logger_output_dir)
     # <---------log_dir config---------->
     if not root_output_dir.exists():
@@ -20,10 +19,13 @@ def create_logger(logger_output_dir, net_name, dataset_name, phase):
     time_str = time.strftime('%Y-%m-%d-%H-%M')
     log_file = '{}_{}.log'.format( time_str, phase)
     final_log_file = final_output_dir / log_file
-    logging.basicConfig(filename=str(final_log_file),
-                        format='%(asctime)-15s %(message)s',
-                        level=logging.INFO)
-    logger = logging.getLogger()
+    logger = logging.getLogger(logger_name)
+    logger.setLevel(level)
+
+    handler = logging.FileHandler(final_log_file)
+    handler.setFormatter(logging.Formatter('%(asctime)-15s %(message)s'))
+    logger.addHandler(handler)
+
     console = logging.StreamHandler(stream=sys.stdout)
     logging.getLogger().addHandler(console)
 
