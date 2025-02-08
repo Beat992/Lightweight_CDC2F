@@ -1,6 +1,4 @@
-import numpy as np
-from sklearn.metrics import confusion_matrix
-
+import torch
 
 class _StreamMetrics(object):
     def __init__(self):
@@ -31,7 +29,7 @@ class StreamSegMetrics(_StreamMetrics):
 
     def __init__(self, n_classes):
         self.n_classes = n_classes
-        self.confusion_matrix = np.zeros((n_classes, n_classes))
+        self.confusion_matrix = torch.zeros((n_classes, n_classes)).cuda()
 
     def update(self, label_trues, label_preds):
         for lt, lp in zip(label_trues, label_preds):
@@ -53,8 +51,8 @@ class StreamSegMetrics(_StreamMetrics):
 
     def _fast_hist(self, label_true, label_pred):
         mask = (label_true >= 0) & (label_true < self.n_classes)
-        hist = np.bincount(
-            self.n_classes * label_true[mask].astype(int) + label_pred[mask],
+        hist = torch.bincount(
+            self.n_classes * label_true[mask].long() + label_pred[mask],
             minlength=self.n_classes ** 2,
         ).reshape(self.n_classes, self.n_classes)
         return hist
@@ -68,19 +66,19 @@ class StreamSegMetrics(_StreamMetrics):
 
         """
         hist = self.confusion_matrix
-        acc = np.diag(hist).sum() / hist.sum()
-        acc_cls = np.diag(hist) / hist.sum(axis=1)  # 每一类的precision
-        acc_cls = np.nanmean(acc_cls)  # 忽略nan然后计算平均值
-        iou = np.diag(hist) / (hist.sum(axis=1) + hist.sum(axis=0) - np.diag(hist))  # 每一类的IoU，[阴性， 阳性] —> [未变化， 变化]
-        mean_iou = np.nanmean(iou)
-        freq = hist.sum(axis=1) / hist.sum()  # 预测出每一类出现的概率
+        acc = torch.diag(hist).sum() / hist.sum()
+        acc_cls = torch.diag(hist) / hist.sum(dim=1)  # 每一类的precision
+        acc_cls = torch.nanmean(acc_cls)  # 忽略nan然后计算平均值
+        iou = torch.diag(hist) / (hist.sum(dim=1) + hist.sum(dim=0) - torch.diag(hist))  # 每一类的IoU，[阴性， 阳性] —> [未变化， 变化]
+        mean_iou = torch.nanmean(iou)
+        freq = hist.sum(dim=1) / hist.sum()  # 预测出每一类出现的概率
         fwavacc = (freq[freq > 0] * iou[freq > 0]).sum()
         # cls_iu = dict(zip(range(self.n_classes), iu))
         cls_iou = []
         for i in range(len(iou)):
             iou_i = iou[i]
             cls_iou.append(iou_i)
-        cls_iou = np.array(cls_iou)
+        cls_iou = torch.tensor(cls_iou)
         return {
             "Overall Acc": acc,          # 反映两类整体的准确率
             "Mean Acc": acc_cls,         # 各自准确率的平均值
@@ -90,7 +88,7 @@ class StreamSegMetrics(_StreamMetrics):
         }
 
     def reset(self):
-        self.confusion_matrix = np.zeros((self.n_classes, self.n_classes))
+        self.confusion_matrix = torch.zeros((self.n_classes, self.n_classes)).cuda()
 
 
 class AverageMeter(object):

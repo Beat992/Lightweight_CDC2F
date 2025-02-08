@@ -1,19 +1,15 @@
-import numpy as np
+import torch
 
 num_class = 2
 
-
 def fast_hist(mask, pred_mask, num_class):
     index = (mask >= 0) & (mask < num_class)
-    return np.bincount(num_class * mask[index].astype(int) + pred_mask[index], minlength=num_class ** 2).reshape(
-        num_class, num_class)
-
+    return torch.bincount(num_class * mask[index].long() + pred_mask[index], minlength=num_class ** 2).reshape(num_class, num_class)
 
 def get_hist(pred_mask, mask):
-    hist = np.zeros((num_class, num_class))
+    hist = torch.zeros((num_class, num_class)).cuda()
     hist += fast_hist(mask.flatten(), pred_mask.flatten(), num_class)
     return hist
-
 
 def cal_kappa(hist):
     if hist.sum() == 0:
@@ -21,8 +17,8 @@ def cal_kappa(hist):
         pe = 1
         kappa = 0
     else:
-        po = np.diag(hist).sum() / hist.sum()  # 对角线之和/all之和
-        pe = np.matmul(hist.sum(1), hist.sum(0).T) / hist.sum() ** 2  # 一行*一列 / all之和^2
+        po = torch.diag(hist).sum() / hist.sum()  # 对角线之和/all之和
+        pe = torch.matmul(hist.sum(1), hist.sum(0).T) / hist.sum() ** 2  # 一行*一列 / all之和^2
         if pe == 1:
             kappa = 0
         else:
@@ -30,14 +26,13 @@ def cal_kappa(hist):
             print('po : {} pe : {}'.format(po, pe))
     return kappa
 
-
 def metric_SeK(infer_array, label_array, n_class, log=None):
     # 这个代码很多语义类别的时候，miou不适用，因为这里的miou仅仅计算的时候两类情况下的
-    hist = np.zeros((n_class, n_class))
+    hist = torch.zeros((n_class, n_class)).cuda()
 
     hist += get_hist(infer_array, label_array)
 
-    iou = np.diag(hist) / (hist.sum(axis=1) + hist.sum(axis=0) - np.diag(hist))
+    iou = torch.diag(hist) / (hist.sum(axis=1) + hist.sum(axis=0) - torch.diag(hist))
 
     IoU_mean = (iou[0] + iou[1]) / 2
 
