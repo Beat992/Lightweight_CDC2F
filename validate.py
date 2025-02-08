@@ -13,19 +13,17 @@ def validate(model, val_dataloader, metrics, log, writer):
             inputs1, input2, mask = batch
             inputs1, inputs2, mask = inputs1.cuda(), input2.cuda(), mask
             output = model(inputs1, inputs2)
-            output = output.detach().cpu().numpy()
-            pred_cm = np.uint8(np.where(output > 0.5, 1, 0))
-            gt_cm = mask.numpy().astype(np.uint8)
-            gt_cm = np.where(gt_cm > 0, 1, 0)
+            pred_cm = torch.where(output > 0.5, 1, 0).to(torch.uint8).cuda()
+            gt_cm = torch.where(mask > 0, 1, 0).to(torch.uint8).cuda()
             pred_all.append(pred_cm)
             gt_all.append(gt_cm)
 
             metrics.update(gt_cm, pred_cm)  # 添加
 
     # <-----返回F1、P、R、MIoU>
-    pred_all = np.concatenate(pred_all, axis=0)
-    gt_all = np.concatenate(gt_all, axis=0)
-    F1, P, R = metric_SeK(infer_array=np.array(pred_all), label_array=np.array(gt_all), n_class=2,
+    pred_all = torch.cat(pred_all, dim=0)
+    gt_all = torch.cat(gt_all, dim=0)
+    F1, P, R = metric_SeK(infer_array=pred_all, label_array=gt_all, n_class=2,
                           log=log)
     score = metrics.get_results()  # 添加
     log.info('metric: ')
