@@ -36,7 +36,7 @@ def init(args):
         os.mkdir(training_best_ckpt)
     ckpt_save_path = os.path.join(training_best_ckpt, ckpt_save_name)
     cnt = 0
-    while os.path.exists(ckpt_save_path):
+    while not args.resume and os.path.exists(ckpt_save_path):
         cnt += 1
         # 在原来的文件名后面加一个数字版本号
         ckpt_save_path = os.path.join(training_best_ckpt, ckpt_save_name.split('.')[0] + f'_v{cnt}' + '.pth')
