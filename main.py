@@ -53,7 +53,8 @@ if __name__ == '__main__':
     args = parser.parse_args()
     cfg.init(args)
 
-    train_logger = create_logger(logger_output_dir=os.path.join(cfg.base_path, 'log'),
+    train_logger = create_logger(logger_name='train',
+                                 logger_output_dir=os.path.join(cfg.base_path, 'log'),
                                  net_name=f'{args.model_version}_{args.backbone}',
                                  dataset_name=args.dataset,
                                  phase='train')
@@ -75,8 +76,8 @@ if __name__ == '__main__':
     elif args.model_version == 'pruned' :
         model = torch.load(os.path.join(cfg.base_path, f'prune/pruned_{args.backbone}_{args.prune_strategy}.pth')).to(device)
     else :
-        model = PureFreCDNet(0.5, 'train', dropout=0.).to(device)
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+        model = PureFreCDNet(0.5, 'train', dropout=0.5).to(device)
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
     # optimizer = torch.optim.SGD(model.parameters(), lr=1e-3, momentum=0.9, weight_decay=1e-4)
     criterion = torch.nn.BCELoss()
 
