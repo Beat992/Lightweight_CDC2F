@@ -12,6 +12,7 @@ def train(model, train_loader, val_loader, criterion, optimizer, metrics, num_ep
         optimizer.load_state_dict(checkpoint['optimizer_state'])
         start_epoch = checkpoint['cur_epoch']
         best_metric = checkpoint['best_score']
+        best_epoch = checkpoint['best_epoch']
         logger.info(f'resume from epoch {start_epoch}')
 
     model.train()
@@ -54,7 +55,8 @@ def train(model, train_loader, val_loader, criterion, optimizer, metrics, num_ep
                     'model_state': model.state_dict(),
                     'optimizer_state': optimizer.state_dict(),
                     'cur_epoch': epoch,
-                    'best_score': current_metric
+                    'best_score': current_metric,
+                    'best_epoch': best_epoch,
                 }, cfg.ckpt_save_path)
             best_metric = current_metric
             best_epoch = epoch
