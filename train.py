@@ -3,6 +3,7 @@ import configs as cfg
 from validate import validate
 
 def train(model, train_loader, val_loader, criterion, optimizer, metrics, num_epoch, device, resume, logger, monitor):
+    model.train()
     start_epoch = 0
     best_metric = 0
     best_epoch = 0
@@ -14,8 +15,8 @@ def train(model, train_loader, val_loader, criterion, optimizer, metrics, num_ep
         best_metric = checkpoint['best_score']
         best_epoch = checkpoint['best_epoch']
         logger.info(f'resume from epoch {start_epoch}')
+        model.eval()
 
-    model.train()
     logger.info(model)
 
     for epoch in range(start_epoch, num_epoch):
