@@ -102,7 +102,7 @@ class CDC2F(nn.Module):
         if self.phase == 'train':
             fine_score_filtered = fine_score_filtered.view(self.batch_size, self.block_num, -1)
             fine_score_filtered = size_restore(fine_score_filtered, self.block_size, 256)
-            return coarse_score, fre_score, fine_score_filtered, fine_idx
+            return coarse_score, fre_score, fine_score_filtered
         else:
             fine_score[fine_idx, :, :, :] = fine_score_filtered
             fine_score = size_restore(fine_score.view(self.batch_size, -1, self.block_size**2), self.block_size, 256)
