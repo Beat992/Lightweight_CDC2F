@@ -1,6 +1,6 @@
 import math
 from torch.optim.lr_scheduler import LambdaLR
-def warmup_cos_schedule(optimizer, warmup_epochs, total_epochs):
+def warmup_cos_schedule(optimizer, warmup_epochs, total_epochs, min_lr=1e-5):
     """
     自定义 Warm-up 调度器。
     :param optimizer: 优化器
@@ -14,7 +14,7 @@ def warmup_cos_schedule(optimizer, warmup_epochs, total_epochs):
             return float(current_epoch) / float(max(1, warmup_epochs))
         else:
             # 按余弦退火或其他方式衰减
-            return max(0.0, 0.5 * (
+            return max(min_lr, 0.5 * (
                         1 + math.cos(math.pi * (current_epoch - warmup_epochs) / (total_epochs - warmup_epochs))))
 
     return LambdaLR(optimizer, lr_lambda)
