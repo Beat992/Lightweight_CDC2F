@@ -50,6 +50,7 @@ if __name__ == '__main__':
     parser.add_argument('--num_epochs', type=int, default=200)
     parser.add_argument('--batch_size', type=int, default=16)
     parser.add_argument('--dataset', type=str, default='levir-3167')
+    parser.add_argument('--resume', type=bool, default=False)
     args = parser.parse_args()
     cfg.init(args)
 
@@ -81,6 +82,6 @@ if __name__ == '__main__':
     # optimizer = torch.optim.SGD(model.parameters(), lr=1e-3, momentum=0.9, weight_decay=1e-4)
     criterion = torch.nn.BCELoss()
 
-    train(model, train_data_loader, val_data_loader, criterion, optimizer, metrics, args.num_epochs, device, train_logger, monitor)
+    train(model, train_data_loader, val_data_loader, criterion, optimizer, metrics, args.num_epochs, device, args.resume, train_logger, monitor)
     test(model, test_data_loader, metrics, None, args)
 

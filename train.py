@@ -2,13 +2,22 @@ import torch
 import configs as cfg
 from validate import validate
 
-def train(model, train_loader, val_loader, criterion, optimizer, metrics, num_epoch, device, logger, monitor):
+def train(model, train_loader, val_loader, criterion, optimizer, metrics, num_epoch, device, resume, logger, monitor):
+    start_epoch = 0
     best_metric = 0
     best_epoch = 0
+    if resume:
+        checkpoint = torch.load(cfg.ckpt_save_path)
+        model.load_state_dict(checkpoint['model_state'])
+        optimizer.load_state_dict(checkpoint['optimizer_state'])
+        start_epoch = checkpoint['cur_epoch']
+        best_metric = checkpoint['best_score']
+        logger.info(f'resume from epoch {start_epoch}')
+
     model.train()
     logger.info(model)
-    step = 0
-    for epoch in range(num_epoch):
+
+    for epoch in range(start_epoch, num_epoch):
         model.phase = 'train'
         model.fph.phase = 'train'
         for idx, batch in enumerate(train_loader):
