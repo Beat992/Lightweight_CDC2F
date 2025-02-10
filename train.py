@@ -7,23 +7,28 @@ def train(model, train_loader, val_loader, criterion, optimizer, metrics, num_ep
     best_epoch = 0
     model.train()
     logger.info(model)
+    step = 0
     for epoch in range(num_epoch):
         model.phase = 'train'
+        model.fph.phase = 'train'
         for idx, batch in enumerate(train_loader):
+            step = epoch * len(train_loader) + idx
             img1, img2, label = batch
             img1, img2, label = img1.to(device), img2.to(device), label.to(device)
             label = label.reshape(-1, 1, 256, 256)
             label = torch.where(label > 0, 1.0, 0)
 
-            coarse_score, fre_score, fine_score_filtered, idx = model(img1, img2)
+            # prob = model(img1, img2)
+            # loss = criterion(prob, label)
+            # monitor.add_scalar('train/loss', loss, epoch)
+            coarse_score, fre_score, fine_score_filtered = model(img1, img2)
             loss1 = criterion(torch.sigmoid(coarse_score), label)
             loss2 = criterion(torch.sigmoid(fine_score_filtered), label)
             loss3 = criterion(torch.sigmoid(fre_score), label)
             loss = loss1 + loss2 + loss3
-            # print(loss)
-            monitor.add_scalar('train/loss1', loss1, epoch)
-            monitor.add_scalar('train/loss2', loss2, epoch)
-            monitor.add_scalar('train/loss3', loss3, epoch)
+            monitor.add_scalar('train/loss1', loss1, step)
+            monitor.add_scalar('train/loss2', loss2, step)
+            monitor.add_scalar('train/loss3', loss3, step)
 
             optimizer.zero_grad()
             loss.backward()
