@@ -11,6 +11,7 @@ from train import train
 from metrics import StreamSegMetrics
 from model import CDC2F
 from model.network_fre import PureFreCDNet
+from utils.scheduler import warmup_cos_schedule
 from utils.logger import create_logger
 from utils.monitor import create_summery_writer
 
@@ -64,7 +65,7 @@ if __name__ == '__main__':
 
     train_data_loader = get_data_loader(cfg.data_path[args.dataset], 'train', batch_size=args.batch_size, txt_path=cfg.train_txt_path)
     val_data_loader = get_data_loader(cfg.data_path[args.dataset], 'val', batch_size=args.batch_size, txt_path=cfg.val_txt_path, shuffle=False)
-    test_data_loader = get_data_loader(cfg.data_path[args.dataset], 'test', batch_size=args.batch_size, txt_path=cfg.test_txt_path)
+    test_data_loader = get_data_loader(cfg.data_path[args.dataset], 'test', batch_size=args.batch_size, txt_path=cfg.test_txt_path, shuffle=False)
 
     metrics = StreamSegMetrics(2)
     monitor = create_summery_writer(log_output_dir=os.path.join(cfg.base_path, 'monitor'),
@@ -78,10 +79,9 @@ if __name__ == '__main__':
         model = torch.load(os.path.join(cfg.base_path, f'prune/pruned_{args.backbone}_{args.prune_strategy}.pth')).to(device)
     else :
         model = PureFreCDNet(0.5, 'train', dropout=0.5).to(device)
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
-    # optimizer = torch.optim.SGD(model.parameters(), lr=1e-3, momentum=0.9, weight_decay=1e-4)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
     criterion = torch.nn.BCELoss()
-
-    train(model, train_data_loader, val_data_loader, criterion, optimizer, metrics, args.num_epochs, device, args.resume, train_logger, monitor)
+    scheduler = warmup_cos_schedule(optimizer, 5, args.num_epochs, 5e-5)
+    train(model, train_data_loader, val_data_loader, criterion, optimizer, scheduler, metrics, args.num_epochs, device, args.resume, train_logger, monitor)
     test(model, test_data_loader, metrics, None, args)
 

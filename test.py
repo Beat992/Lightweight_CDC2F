@@ -14,8 +14,9 @@ def test(model, test_data_loader, metrics, writer, args):
                            net_name=f'{args.model_version}_{args.backbone}',
                            dataset_name=args.dataset,
                            phase='test')
-    model.phase = 'test'
-    model.fph.phase = 'test'
+    if isinstance(model, CDC2F):
+        model.phase = 'test'
+        model.fph.phase = 'test'
     validate(model, test_data_loader, metrics, logger, writer)
 
 if __name__ == '__main__':
