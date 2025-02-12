@@ -19,7 +19,7 @@ def train(model, train_loader, val_loader,
         schedular.load_state_dict(checkpoint['schedular_state'])
         start_epoch = checkpoint['cur_epoch']
         best_metric = checkpoint['best_score']
-        best_epoch = checkpoint['best_epoch']
+        best_epoch = checkpoint['cur_epoch']
         logger.info(f'resume from epoch {start_epoch}')
 
     logger.info(model)
@@ -30,7 +30,7 @@ def train(model, train_loader, val_loader,
             model.fph.phase = 'train'
         model.train()
         if epoch >= 5:     # warm up stop, freeze bn
-            freeze_batchnorm(model)
+            freeze_bn(model)
         for idx, batch in enumerate(train_loader):
             step = epoch * len(train_loader) + idx
             img1, img2, label = batch
@@ -57,19 +57,18 @@ def train(model, train_loader, val_loader,
                     'schedular_state': schedular.state_dict(),
                     'cur_epoch': epoch,
                     'best_score': current_metric,
-                    'best_epoch': best_epoch,
                 }, cfg.ckpt_save_path)
             best_metric = current_metric
             best_epoch = epoch
         logger.info(f'best epoch: {best_epoch}')
 
 
-def freeze_batchnorm(module):
+def freeze_bn(module):
     """
     冻结模型中的所有 BatchNorm 层。
     """
     for child in module.children():
-        if isinstance(child, (nn.BatchNorm1d, nn.BatchNorm2d, nn.BatchNorm3d)):
+        if isinstance(child, (nn.BatchNorm1d, nn.BatchNorm2d)):
             # 冻结参数
             for param in child.parameters():
                 param.requires_grad = False
@@ -77,4 +76,4 @@ def freeze_batchnorm(module):
             child.eval()
         else:
             # 递归处理子模块
-            freeze_batchnorm(child)
+            freeze_bn(child)
