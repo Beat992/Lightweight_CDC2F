@@ -44,12 +44,13 @@ if __name__ == '__main__':
     parser.add_argument('--backbone', type=str, default='resnet50',
                         help='backbone, include resnet18/34/50/101, default: resnet50')
     parser.add_argument('--model_version', type=str, default='origin',
-                        help='model version, origin / pruned / purn_fre(default: origin)')
+                        help='model version, origin / pruned / fre(default: origin)')
     parser.add_argument('--prune_strategy', type=str, default=None,
-                        help='prune strategy, topk / mean&std')
+                        help='prune strategy, topk / mean')
     parser.add_argument('--prune_factor', type=float, default=None)
     parser.add_argument('--num_epochs', type=int, default=200)
     parser.add_argument('--batch_size', type=int, default=16)
+    parser.add_argument('--dropout', type=float, default=0.2)
     parser.add_argument('--dataset', type=str, default='levir-3167')
     parser.add_argument('--resume', type=bool, default=False)
     args = parser.parse_args()
@@ -74,12 +75,12 @@ if __name__ == '__main__':
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     if args.model_version == 'origin':
-        model = CDC2F(args.backbone, stages_num=5, phase='train', backbone_pretrained=True).to(device)
+        model = CDC2F(args.backbone, stages_num=5, phase='train', backbone_pretrained=True, dropout=args.dropout).to(device)
     elif args.model_version == 'pruned' :
         model = torch.load(os.path.join(cfg.base_path, f'prune/pruned_{args.backbone}_{args.prune_strategy}.pth')).to(device)
     else :
-        model = PureFreCDNet(0.5, 'train', dropout=0.5).to(device)
-    optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
+        model = PureFreCDNet(0.5, 'train', dropout=args.dropout).to(device)
+    optimizer = torch.optim.Adam(model.parameters(), lr=5e-4)
     criterion = torch.nn.BCELoss()
     scheduler = warmup_cos_schedule(optimizer, 5, args.num_epochs, 5e-5)
     train(model, train_data_loader, val_data_loader, criterion, optimizer, scheduler, metrics, args.num_epochs, device, args.resume, train_logger, monitor)

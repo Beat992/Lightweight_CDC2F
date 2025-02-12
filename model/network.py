@@ -7,8 +7,8 @@ class CDC2F(nn.Module):
     def __init__(self,
                  backbone='resnet18', stages_num=4, backbone_pretrained=False,
                  threshold=0.5, phase='val', dct_size=4, block_size=32,
-                 encoder_depth=1, encoder_heads=8, encoder_dim=8, decoder_depth=1,
-                 decoder_heads=4, decoder_dim=8,
+                 encoder_depth=1, encoder_heads=8, encoder_dim=8,
+                 decoder_depth=1, decoder_heads=4, decoder_dim=8,
                  dropout=0.5):
         super(CDC2F, self).__init__()
         self.batch_size = None
