@@ -5,7 +5,10 @@ import configs as cfg
 from model import CDC2F
 from validate import validate
 
-def train(model, train_loader, val_loader, criterion, optimizer, schedular, metrics, num_epoch, device, resume, logger, monitor):
+def train(model, train_loader, val_loader,
+          criterion, optimizer, schedular, loss_func,
+          metrics, num_epoch, device, resume,
+          logger, monitor):
     start_epoch = 0
     best_metric = 0
     best_epoch = 0
@@ -34,21 +37,7 @@ def train(model, train_loader, val_loader, criterion, optimizer, schedular, metr
             img1, img2, label = img1.to(device), img2.to(device), label.to(device)
             label = label.reshape(-1, 1, 256, 256)
             label = torch.where(label > 0, 1.0, 0)
-
-            if isinstance(model, CDC2F):
-                coarse_score, fre_score, fine_score_filtered = model(img1, img2)
-                loss1 = criterion(torch.sigmoid(coarse_score), label)
-                loss2 = criterion(torch.sigmoid(fine_score_filtered), label)
-                loss3 = criterion(torch.sigmoid(fre_score), label)
-                loss = loss1 + loss2 + loss3
-                monitor.add_scalar('train/loss1', loss1, step)
-                monitor.add_scalar('train/loss2', loss2, step)
-                monitor.add_scalar('train/loss3', loss3, step)
-            else :
-                prob = model(img1, img2)
-                loss = criterion(prob, label)
-                monitor.add_scalar('train/loss', loss, step)
-
+            loss = loss_func(model, criterion, img1, img2, label, monitor, step)
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()

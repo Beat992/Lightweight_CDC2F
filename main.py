@@ -13,6 +13,7 @@ from model import CDC2F
 from model.network_fre import PureFreCDNet
 from utils.scheduler import warmup_cos_schedule
 from utils.logger import create_logger
+from utils.loss import compute_loss_CDC2F, compute_loss_PureFreCDNet
 from utils.monitor import create_summery_writer
 
 
@@ -76,13 +77,19 @@ if __name__ == '__main__':
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     if args.model_version == 'origin':
         model = CDC2F(args.backbone, stages_num=5, phase='train', backbone_pretrained=True, dropout=args.dropout).to(device)
+        loss_func = compute_loss_CDC2F
     elif args.model_version == 'pruned' :
         model = torch.load(os.path.join(cfg.base_path, f'prune/pruned_{args.backbone}_{args.prune_strategy}.pth')).to(device)
+        loss_func = compute_loss_CDC2F
     else :
         model = PureFreCDNet(0.5, 'train', dropout=args.dropout).to(device)
+        loss_func = compute_loss_PureFreCDNet
     optimizer = torch.optim.Adam(model.parameters(), lr=5e-4)
     criterion = torch.nn.BCELoss()
     scheduler = warmup_cos_schedule(optimizer, 5, args.num_epochs, 5e-5)
-    train(model, train_data_loader, val_data_loader, criterion, optimizer, scheduler, metrics, args.num_epochs, device, args.resume, train_logger, monitor)
+    train(model, train_data_loader, val_data_loader,
+          criterion, optimizer, scheduler, loss_func, metrics,
+          args.num_epochs, device, args.resume,
+          train_logger, monitor)
     test(model, test_data_loader, metrics, None, args)
 
