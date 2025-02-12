@@ -13,6 +13,7 @@ def train(model, train_loader, val_loader, criterion, optimizer, schedular, metr
         checkpoint = torch.load(cfg.ckpt_save_path)
         model.load_state_dict(checkpoint['model_state'])
         optimizer.load_state_dict(checkpoint['optimizer_state'])
+        schedular.load_state_dict(checkpoint['schedular_state'])
         start_epoch = checkpoint['cur_epoch']
         best_metric = checkpoint['best_score']
         best_epoch = checkpoint['best_epoch']
@@ -64,6 +65,7 @@ def train(model, train_loader, val_loader, criterion, optimizer, schedular, metr
                 {
                     'model_state': model.state_dict(),
                     'optimizer_state': optimizer.state_dict(),
+                    'schedular_state': schedular.state_dict(),
                     'cur_epoch': epoch,
                     'best_score': current_metric,
                     'best_epoch': best_epoch,
