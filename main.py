@@ -7,6 +7,7 @@ import torch
 
 from dataset import get_data_loader
 from test import test
+# from train_grad_accu import train
 from train import train
 from metrics import StreamSegMetrics
 from model import CDC2F
@@ -51,6 +52,8 @@ if __name__ == '__main__':
     parser.add_argument('--prune_factor', type=float, default=None)
     parser.add_argument('--num_epochs', type=int, default=200)
     parser.add_argument('--batch_size', type=int, default=16)
+    parser.add_argument('--lr', type=float, default=1e-3)
+    parser.add_argument('--weight_decay', type=float, default=1e-3)
     parser.add_argument('--dropout', type=float, default=0.2)
     parser.add_argument('--dataset', type=str, default='levir-3167')
     parser.add_argument('--resume', type=bool, default=False)
@@ -77,16 +80,20 @@ if __name__ == '__main__':
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     if args.model_version == 'origin':
         model = CDC2F(args.backbone, stages_num=5, phase='train', backbone_pretrained=True, dropout=args.dropout).to(device)
-        loss_func = compute_loss_CDC2F
+        # loss_func = compute_loss_CDC2F
     elif args.model_version == 'pruned' :
         model = torch.load(os.path.join(cfg.base_path, f'prune/pruned_{args.backbone}_{args.prune_strategy}.pth')).to(device)
-        loss_func = compute_loss_CDC2F
+        # loss_func = compute_loss_CDC2F
     else :
         model = PureFreCDNet(0.5, 'train', dropout=args.dropout).to(device)
         loss_func = compute_loss_PureFreCDNet
-    optimizer = torch.optim.Adam(model.parameters(), lr=5e-4)
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     criterion = torch.nn.BCELoss()
     scheduler = warmup_cos_schedule(optimizer, 5, args.num_epochs, 5e-5)
+    # train(model, train_data_loader, val_data_loader,
+    #       criterion, optimizer, scheduler, metrics,
+    #       args.num_epochs, 16, device, args.resume,
+    #       train_logger, monitor)
     train(model, train_data_loader, val_data_loader,
           criterion, optimizer, scheduler, loss_func, metrics,
           args.num_epochs, device, args.resume,
