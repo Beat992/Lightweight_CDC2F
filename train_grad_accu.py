@@ -5,7 +5,7 @@ import configs as cfg
 from model import CDC2F
 from validate import validate
 
-def train(model, train_loader, val_loader,
+def train_with_ga(model, train_loader, val_loader,
           criterion, optimizer, schedular, metrics,
           num_epoch, accumulation_steps, device, resume,
           logger, monitor):
@@ -29,13 +29,11 @@ def train(model, train_loader, val_loader,
             model.phase = 'train'
             model.fph.phase = 'train'
         model.train()
-        if epoch >= 5:     # warm up stop, freeze bn
-            freeze_bn(model)
+        # if epoch >= 5:     # warm up stop, freeze bn
+        #     freeze_bn(model)
 
         cnt = 0
         loss_1 = []
-        loss_2 = []
-        loss_3 = []
         for idx, batch in enumerate(train_loader):
             cnt += 1
             step = epoch * len(train_loader) + idx
@@ -44,30 +42,22 @@ def train(model, train_loader, val_loader,
             label = label.reshape(-1, 1, 256, 256)
             label = torch.where(label > 0, 1.0, 0)
 
-            coarse_score, fre_score, fine_score_filtered = model(img1, img2)
-            loss1 = criterion(torch.sigmoid(coarse_score), label)
+            prob = model(img1, img2)
+            loss1 = criterion(prob, label)
             loss_1.append(loss1)
-            loss2 = criterion(torch.sigmoid(fine_score_filtered), label)
-            loss_2.append(loss2)
-            loss3 = criterion(torch.sigmoid(fre_score), label)
-            loss_3.append(loss3)
 
-            loss = loss1 + loss2 + loss3
-
-
-            loss.backward()
+            loss1.backward()
             if cnt == accumulation_steps:
                 optimizer.step()  # 更新参数
                 optimizer.zero_grad()  # 清空梯度
-                monitor.add_scalar('train/loss1', sum(loss_1), step // accumulation_steps)
-                monitor.add_scalar('train/loss2', sum(loss_2), step // accumulation_steps)
-                monitor.add_scalar('train/loss3', sum(loss3), step // accumulation_steps)
+                monitor.add_scalar('train/loss1', sum(loss_1) / accumulation_steps, step // accumulation_steps)
+
                 loss_1.clear()
-                loss_2.clear()
-                loss_3.clear()
+
                 cnt = 0
 
-        schedular.step()
+        if schedular is not None:
+            schedular.step()
         # evaluate
         if isinstance(model, CDC2F):
             model.phase = 'val'
@@ -86,19 +76,3 @@ def train(model, train_loader, val_loader,
             best_metric = current_metric
             best_epoch = epoch
         logger.info(f'best epoch: {best_epoch}')
-
-
-def freeze_bn(module):
-    """
-    冻结模型中的所有 BatchNorm 层。
-    """
-    for child in module.children():
-        if isinstance(child, (nn.BatchNorm1d, nn.BatchNorm2d)):
-            # 冻结参数
-            for param in child.parameters():
-                param.requires_grad = False
-            # 切换到 eval 模式，禁用统计量更新
-            child.eval()
-        else:
-            # 递归处理子模块
-            freeze_bn(child)
