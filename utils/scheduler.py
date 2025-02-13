@@ -11,7 +11,7 @@ def warmup_cos_schedule(optimizer, warmup_epochs, total_epochs, min_lr=1e-5):
     def lr_lambda(current_epoch):
         if current_epoch < warmup_epochs:
             # 线性增长到初始学习率
-            return float(current_epoch) / float(max(1, warmup_epochs))
+            return float(current_epoch) + 1 / float(max(1, warmup_epochs))
         else:
             # 按余弦退火或其他方式衰减
             return max(min_lr, 0.5 * (
