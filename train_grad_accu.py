@@ -1,6 +1,4 @@
 import torch
-import torch.nn as nn
-
 import configs as cfg
 from model import CDC2F
 from validate import validate
@@ -69,7 +67,7 @@ def train_with_ga(model, train_loader, val_loader,
                 {
                     'model_state': model.state_dict(),
                     'optimizer_state': optimizer.state_dict(),
-                    'schedular_state': schedular.state_dict(),
+                    'schedular_state': schedular.state_dict() if schedular is not None else None,
                     'cur_epoch': epoch,
                     'best_score': current_metric,
                 }, cfg.ckpt_save_path)
